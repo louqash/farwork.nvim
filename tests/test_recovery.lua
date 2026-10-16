@@ -2,7 +2,7 @@ vim.opt.rtp:prepend(vim.fn.getcwd())
 local tmp = vim.uv.fs_realpath(vim.fn.tempname()) or vim.fn.tempname()
 vim.fn.mkdir(tmp, 'p')
 require('farwork').setup({ cache_dir = tmp, state_dir = tmp })
-assert(vim.fn.exists(':RemoteDoctor') == 2)
+assert(vim.fn.exists(':FarworkDoctor') == 2)
 local recovery = require('farwork.recovery')
 local upload = require('farwork.upload')
 local releases, applies, held = {}, 0, false

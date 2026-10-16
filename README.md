@@ -22,7 +22,7 @@ Neovim + local files  ── save ────►  Project files + dependencies
 - C/C++ completion, diagnostics, and navigation use remote clangd.
 - Builds use the remote toolchain, including a Python venv if needed.
 - Pre-commit checks run remotely and can return formatting fixes to local files.
-- `:RemoteDoctor` explains sync failures and guides you through supported repairs.
+- `:FarworkDoctor` explains sync failures and guides you through supported repairs.
 
 > **Local files are the source of truth.** Normal sync uploads files; it does not
 > merge remote edits back into local files. Uploads can overwrite matching remote
@@ -156,7 +156,7 @@ require("farwork").setup({
 Builds run in the remote checkout. Checks run in a temporary copy of the local
 index, not the remote checkout; untracked dependencies and build artifacts are
 not included. `check_args = "none"` passes the command unchanged. Stage files
-first or use `:RemoteCheck!`. With `lsp = false`, local language servers remain
+first or use `:FarworkCheck!`. With `lsp = false`, local language servers remain
 available; Farwork does not provide remote servers for other languages yet.
 
 ### 4. Open Neovim and connect
@@ -166,40 +166,48 @@ project config and connects. Neovim asks you to trust the config before using
 it, and asks again if its contents change. Read it first: it sets the upload
 destination and may run a remote shell command.
 
+Use `:FarworkTrust` from a project file or directory to open `.farwork.json`
+read-only and explicitly approve its reviewed contents. Cancel is the default.
+This also lets you reconsider a previously denied file. Then run `:FarworkStart`.
+`:FarworkTrust!` removes the saved trust decision, so the next connection asks
+for review again. It does not stop an already active connection or upload.
+Both commands use Neovim's built-in trust database; edits to the config require
+fresh approval. Neovim's own `:trust` command remains available.
+
 To connect manually, run:
 
 ```vim
-:RemoteStart
+:FarworkStart
 ```
 
 Wait for the initial upload to finish. Check the connection with:
 
 ```vim
-:RemoteStatus
+:FarworkStatus
 ```
 
 For a C/C++ buffer, the attached server should show `remote_clangd` as initialized.
-Save files as usual. Build with `:RemoteBuild`.
+Save files as usual. Build with `:FarworkBuild`.
 
 <details>
 <summary>No project file? Use interactive setup</summary>
 
-Run `:RemoteStart` from the local repository root. Enter
+Run `:FarworkStart` from the local repository root. Enter
 `build-host:/absolute/remote/project`, an optional environment command, and the
 build directory if asked. These settings are saved locally for later sessions.
-Use `:RemoteStart!` to change them, or `:RemoteProjects` to choose a saved project.
+Use `:FarworkStart!` to change them, or `:FarworkProjects` to choose a saved project.
 You can open the picker from any directory, including an empty one. After the
 selected project's connection setup and initial upload succeed, Neovim changes
 its working directory to that project's existing local root (`:cd`), so file
 pickers and directory-based commands follow it. It does not clone into the
 current directory or close your open buffers. Cancelling the picker or a failed
 connection leaves your working directory unchanged; a successful upload retry
-completes the switch. `:RemoteStart` and auto-connect do not change directories.
+completes the switch. `:FarworkStart` and auto-connect do not change directories.
 
 If the local directory has no `.git`, the plugin can copy the remote Git history
 and download missing source files. Existing local files are preserved. Existing
 Git checkouts skip that download. Start with matching branches and commits when
-using two existing checkouts; use `:RemoteDoctor` if they differ.
+using two existing checkouts; use `:FarworkDoctor` if they differ.
 
 </details>
 
@@ -242,29 +250,35 @@ remote projects. Remote-only headers are loaded through Farwork's cache.
 
 ## Commands
 
+Commands now use the `Farwork` prefix. The former `Remote…` and `Upload…`
+commands have no compatibility aliases; update custom mappings accordingly.
+
+
 | Task | Command |
 | --- | --- |
-| Connect or reconnect | `:RemoteStart` |
-| Change connection settings | `:RemoteStart!` |
-| Connect to a saved project and switch to its local root | `:RemoteProjects` |
-| See connection, LSP, and upload status | `:RemoteStatus` |
-| Upload saved files and retry the queue | `:RemoteSync` |
-| Wait for uploads | `:UploadWait` |
-| Inspect or retry a failed upload | `:UploadStatus` / `:UploadRetry` |
-| Explain a sync failure and review a repair | `:RemoteDoctor` |
-| Build remotely | `:RemoteBuild` |
-| Build a target | `:RemoteBuild --target my_app -j 8` |
-| Run pre-commit on staged files | `:RemoteCheck` |
-| Run pre-commit on all files in the Git index | `:RemoteCheck!` |
-| View the remote diff | `:RemoteDiff` / `:RemoteDiff!` for staged changes |
-| Restart remote clangd | `:RemoteRefresh` |
-| Stop uploads and discard the queued transfers | `:UploadStop` |
+| Connect or reconnect | `:FarworkStart` |
+| Review and trust the project config | `:FarworkTrust` |
+| Revoke the project config’s trust decision | `:FarworkTrust!` |
+| Change connection settings | `:FarworkStart!` |
+| Connect to a saved project and switch to its local root | `:FarworkProjects` |
+| See connection, LSP, and upload status | `:FarworkStatus` |
+| Upload saved files and retry the queue | `:FarworkSync` |
+| Wait for uploads | `:FarworkUploadWait` |
+| Inspect or retry a failed upload | `:FarworkUploadStatus` / `:FarworkUploadRetry` |
+| Explain a sync failure and review a repair | `:FarworkDoctor` |
+| Build remotely | `:FarworkBuild` |
+| Build a target | `:FarworkBuild --target my_app -j 8` |
+| Run pre-commit on staged files | `:FarworkCheck` |
+| Run pre-commit on all files in the Git index | `:FarworkCheck!` |
+| View the remote diff | `:FarworkDiff` / `:FarworkDiff!` for staged changes |
+| Restart remote clangd | `:FarworkRefresh` |
+| Stop uploads and discard the queued transfers | `:FarworkUploadStop` |
 
-`RemoteSync` does not save buffers. `RemoteBuild` requires saved project buffers
-and an idle upload queue. `UploadWait` can stop waiting because of an error;
+`FarworkSync` does not save buffers. `FarworkBuild` requires saved project buffers
+and an idle upload queue. `FarworkUploadWait` can stop waiting because of an error;
 check that uploads finished successfully, not just that the command returned.
 
-`UploadStop` preserves local files. It stops uploads, not the whole remote LSP
+`FarworkUploadStop` preserves local files. It stops uploads, not the whole remote LSP
 connection. Close Neovim to end the session.
 
 ## Git and checks
@@ -272,20 +286,20 @@ connection. Close Neovim to end the session.
 ### A normal edit and commit
 
 1. Edit and save locally.
-2. Run `:UploadWait` and confirm that uploads succeeded.
+2. Run `:FarworkUploadWait` and confirm that uploads succeeded.
 3. Stage the files you want to commit with `git add`.
-4. If the project uses pre-commit, run `:RemoteCheck`.
+4. If the project uses pre-commit, run `:FarworkCheck`.
 5. Review any returned fixes, stage them, and rerun the check.
 6. Wait for uploads to succeed, then commit and push locally.
 
 A push updates your Git server. It does not update the remote working checkout.
 With `git = { auto_fast_forward = true }`, the next upload can advance the remote branch and
 index when its tracked files already match your new commit. Other mismatches
-pause uploads and point you to `:RemoteDoctor`.
+pause uploads and point you to `:FarworkDoctor`.
 
 ### How remote pre-commit works
 
-`:RemoteCheck` sends a copy of the **local Git index**—the staged version of your
+`:FarworkCheck` sends a copy of the **local Git index**—the staged version of your
 files—to a temporary remote repository. It runs hooks on the staged added or
 modified files using your remote environment. A split opens at once and shows
 progress and hook output.
@@ -300,7 +314,7 @@ Fixes remain **unstaged** so you can review them. If a file conflicts, the whole
 batch of fixes is kept for review instead. The output shows where to find the
 original files, fixed files, and logs.
 
-> `:RemoteCheck!` checks every file in the index. It does not include unstaged
+> `:FarworkCheck!` checks every file in the index. It does not include unstaged
 > edits or untracked files. Neither command installs a local Git hook.
 
 Hooks run outside the main remote checkout. Hooks that need its build artifacts
@@ -310,16 +324,16 @@ review. Closing Neovim during a check does not guarantee that it finishes.
 
 ### A merge or rebase
 
-Finish uploads, then run `:UploadStop`. Resolve conflicts locally and finish the
-merge or rebase. Run `:RemoteDoctor` to review how the remote checkout should
-catch up. If uploads were stopped, run `:RemoteStart` after recovery.
+Finish uploads, then run `:FarworkUploadStop`. Resolve conflicts locally and finish the
+merge or rebase. Run `:FarworkDoctor` to review how the remote checkout should
+catch up. If uploads were stopped, run `:FarworkStart` after recovery.
 
 ## Fix a problem
 
 For a Git mismatch, start with:
 
 ```vim
-:RemoteDoctor
+:FarworkDoctor
 ```
 
 It opens a report, holds uploads while you review it, and lists each affected
@@ -348,17 +362,17 @@ The venv, build outputs, and untracked files are left alone during repair.
 | Local edits are not committed | Review and finish the local commit you want the remote to match. Run the doctor again. |
 | Git operation or lock is active | Run `git status` in the checkout named in the report. Finish or deliberately abort the operation. Do not delete a lock while Git is running. |
 | Remote staged changes | Review `git diff --cached` on the remote and preserve that work first. |
-| Conflicting remote edits | Review the named files with `:RemoteDiff` or remote `git diff`. Copy wanted changes to a separate local file and merge them locally. Resolve any remaining remote difference explicitly. |
+| Conflicting remote edits | Review the named files with `:FarworkDiff` or remote `git diff`. Copy wanted changes to a separate local file and merge them locally. Resolve any remaining remote difference explicitly. |
 | Remote commits are missing locally | Run the fetch command in the report, then inspect `git log FETCH_HEAD`. Fetching does not switch your local branch. |
 | Branch names differ | Choose the intended branch on each side. The doctor does not switch branches. |
 | Added, deleted, renamed, linked, or protected paths | These need manual review. Guided repair only changes existing regular tracked files. |
-| SSH or upload failure | Reconnect the workspace and test its SSH alias. Then use `:UploadRetry`. |
+| SSH or upload failure | Reconnect the workspace and test its SSH alias. Then use `:FarworkUploadRetry`. |
 | Missing local tools | Run `:checkhealth farwork`. |
-| Stale C++ diagnostics | Check `:RemoteStatus`. Once uploads are idle, try `:RemoteRefresh`. |
+| Stale C++ diagnostics | Check `:FarworkStatus`. Once uploads are idle, try `:FarworkRefresh`. |
 | Build uses the wrong Python | Activate the remote venv, then reconfigure CMake's cached Python interpreter. |
 
 If a repair is interrupted, some verified files may already have changed. The
-error reports the backup location. Run `:RemoteDoctor` again before continuing.
+error reports the backup location. Run `:FarworkDoctor` again before continuing.
 Do not run another uploader or remote Git operation during recovery.
 
 See `:help farwork-recovery` for details.
@@ -400,10 +414,10 @@ require("farwork").setup({
   plugin appends `--files ...` or `--all-files`. Use `"none"` to pass it unchanged.
 - `operation_timeout` bounds Git/recovery helper execution and setup transfers.
   `check_timeout` bounds remote checks. A timed-out operation reports failure;
-  a timed-out repair may be partial, so inspect it with `:RemoteDoctor`.
-- `:UploadStop` cancels the active transfer or Git guard and discards the queue.
+  a timed-out repair may be partial, so inspect it with `:FarworkDoctor`.
+- `:FarworkUploadStop` cancels the active transfer or Git guard and discards the queue.
   A transfer may already have written files; reconnect and sync to reconcile.
-- `:RemoteCheckStop` cancels a check without applying returned fixes.
+- `:FarworkCheckStop` cancels a check without applying returned fixes.
 - `upload_exclude` adds exclusions. It cannot remove the built-in protections
   and does not control the initial download.
 - `notify_uploads` enables success messages for individual uploads. Errors are
@@ -451,7 +465,7 @@ root, Lua fields override JSON fields. JSON replaces saved settings, so an
 omitted environment command does not inherit an old one.
 
 A failed or cancelled automatic connection is not retried on every buffer
-switch. Use `:RemoteStart` to retry. Switching away from an active remote project
+switch. Use `:FarworkStart` to retry. Switching away from an active remote project
 is also explicit. The plugin never executes repository-local Lua files.
 
 </details>
@@ -483,9 +497,9 @@ upload finished; `lsp_connected` means clangd is initialized and running.
 <details>
 <summary>Uploads without remote clangd</summary>
 
-Run `:UploadStart` from a local project directory. Enter a destination such as
+Run `:FarworkUploadStart` from a local project directory. Enter a destination such as
 `build-host:/home/dev/my-app/`. The plugin remembers it and uploads on save.
-Use `:UploadStart another-host:/absolute/path/` to change the destination.
+Use `:FarworkUploadStart another-host:/absolute/path/` to change the destination.
 
 This mode does **not** use the Git guard. It also does not supply remote language
 analysis; local language servers still need local dependencies.
@@ -522,7 +536,7 @@ need a connection. Local Git diff and status work offline. Upload queues live
 in memory: closing Neovim does not preserve the queue. Reconnect and run a full
 sync to send saved files that have not reached the remote.
 
-Interrupted first-time downloads are resumed on the next `:RemoteStart`;
+Interrupted first-time downloads are resumed on the next `:FarworkStart`;
 existing local files are preserved. Normal reconnects do not restore deliberate
 local deletions.
 
@@ -533,12 +547,22 @@ The plugin supports one active remote project per Neovim instance. LSP requests,
 remote headers, builds, and checks still have network latency. It does not copy
 or recreate the remote dependencies on your computer.
 
+The project picker includes `.farwork.json` in the current directory or current
+file's project, plus file-configured projects previously connected successfully.
+It remembers their local paths only, never copies their settings. Listing a
+project does not approve or execute its config. Every connection rereads the
+file and checks Neovim's trust database, even when selected from another
+directory. Editing the config invalidates its previous approval; review and
+trust the changed contents before reconnecting. Existing connections retain
+their current settings until reconnected.
+
 ## Remove a project
 
 Finish uploads, then close the Neovim session. Remove `.farwork.json`
 and any matching Lua profile or saved entry in `remote-projects.json`. This
 removes the connection settings, not your local files or remote workspace.
-Removing the marker alone does not stop an active connection.
+Removing the marker alone does not stop an active connection. Remembered file-only
+projects disappear from the picker when their marker is removed.
 
 ## State, backups, and logs
 
@@ -547,7 +571,8 @@ Paths are relative to Neovim's standard directories unless you override them:
 | Location | Contents |
 | --- | --- |
 | State: `remote-projects.json` | Connections saved by interactive setup. Project-file connections do not create entries. |
-| State: `upload-projects.json` | Destinations saved by `UploadStart`. |
+| State: `project-roots.json` | Local paths of successfully connected file-configured projects; no settings or trust decisions. |
+| State: `upload-projects.json` | Destinations saved by `FarworkUploadStart`. |
 | Cache: `remote-headers/` | Remote headers fetched for navigation. |
 | Cache: `checks/` | Check logs and returned fixes in `before/` and `after/`. |
 | Cache: `recovery/` | Saved recovery plans. |

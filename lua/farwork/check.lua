@@ -27,7 +27,7 @@ function M.start(root, config, all_files)
   vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = buf })
   local log = "Preparing local staged snapshot…\nResults: " .. directory .. "\n"
   local completed, cancelled = false, false
-  vim.api.nvim_create_user_command("RemoteCheckStop", function()
+  vim.api.nvim_create_user_command("FarworkCheckStop", function()
     if running and process then
       cancelled = true
       process:kill(15)
@@ -98,7 +98,7 @@ function M.start(root, config, all_files)
       table.insert(lines, "Fixes were NOT applied: " .. blocked)
       table.insert(lines, "Review before/ and after/ in the result directory; your local edits are preserved.")
     elseif applied then
-      table.insert(lines, "Formatter fixes applied locally. Review, git add, and run :RemoteCheck again.")
+      table.insert(lines, "Formatter fixes applied locally. Review, git add, and run :FarworkCheck again.")
     end
     render(table.concat(lines, "\n"))
     notify(blocked and "Fixes need review; see check output" or applied and "Fixes applied; review and stage them"

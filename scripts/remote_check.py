@@ -139,7 +139,7 @@ def run(root, host, environment, output_dir, all_files, command, args="pre-commi
     files = git(root, 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z').decode().rstrip('\0').split('\0')
     files = [p for p in files if p]
     if not files and not all_files:
-        result = dict(code=0, output='No staged files. Stage changes first, or use :RemoteCheck! to check every file in the index.\n', changes=[])
+        result = dict(code=0, output='No staged files. Stage changes first, or use :FarworkCheck! to check every file in the index.\n', changes=[])
     else:
         request = dict(archive=encode(snapshot(root, tree)), files=files,
                        all=all_files, command=command, args=args)

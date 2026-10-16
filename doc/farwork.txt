@@ -30,42 +30,55 @@ cache_dir        Header cache parent directory; default stdpath('cache').
 
 Build arguments are quoted automatically. Exclusions are additive and only
 affect uploads. SSH identity/proxy settings come from ~/.ssh/config. Remote
-environment activation is saved per project through :RemoteStart!.
+environment activation is saved per project through :FarworkStart!.
 
 COMMANDS                                          *farwork-commands*
-:RemoteStart [dest]   Connect from a project/subdirectory; optional host:/path.
-:RemoteStart!         Prompt for destination, environment and build directory.
-:RemoteProjects       Connect to a saved/configured project, then :cd its root.
-:RemoteSync           Retry uploads and sync saved files without restarting LSP.
-:RemoteStatus         Show project and language-server status.
-:RemoteRefresh        Restart remote clangd once uploads are idle.
-:RemoteBuild [args]   Sync saved files, then build; append safely quoted args.
-:RemoteDiff[!]        Show remote unstaged [staged] diff. q closes the split.
-:UploadStart [dest]   Upload files without starting remote clangd.
-:UploadStatus        Show current transfer/queue state (after uploads start).
-:UploadWait          Wait up to 30 seconds for uploads.
-:RemoteDoctor        Diagnose upload/Git errors and review a guarded repair.
-:UploadRetry         Retry a failed queue without discarding saved files.
-:UploadStop          Cancel the active transfer/guard and discard its queue.
-:RemoteCheckStop     Cancel a running check without applying returned fixes.
+:FarworkStart [dest]   Connect from a project/subdirectory; optional host:/path.
+:FarworkStart!         Prompt for destination, environment and build directory.
+:FarworkProjects       Connect to a saved/configured project, then :cd its root.
+:FarworkTrust          Open .farwork.json for review and explicit trust approval.
+:FarworkTrust!         Remove its saved trust decision; active sessions continue.
+:FarworkSync           Retry uploads and sync saved files without restarting LSP.
+:FarworkStatus         Show project and language-server status.
+:FarworkRefresh        Restart remote clangd once uploads are idle.
+:FarworkBuild [args]   Sync saved files, then build; append safely quoted args.
+:FarworkDiff[!]        Show remote unstaged [staged] diff. q closes the split.
+:FarworkUploadStart [dest]   Upload files without starting remote clangd.
+:FarworkUploadStatus        Show current transfer/queue state (after uploads start).
+:FarworkUploadWait          Wait up to 30 seconds for uploads.
+:FarworkDoctor        Diagnose upload/Git errors and review a guarded repair.
+:FarworkUploadRetry         Retry a failed queue without discarding saved files.
+:FarworkUploadStop          Cancel the active transfer/guard and discard its queue.
+:FarworkCheckStop     Cancel a running check without applying returned fixes.
 
-:RemoteProjects works from any directory. It switches to the selected local
+:FarworkProjects works from any directory. It switches to the selected local
 root only after setup and the initial upload succeed. Cancellation or failure
 keeps the current directory; a successful upload retry completes the switch.
 Existing buffers stay open. Nothing is cloned into the directory you started
-from. :RemoteStart and auto-connect do not change directories. The directory
+from. :FarworkStart and auto-connect do not change directories. The directory
 change uses :cd (global, not :lcd or :tcd).
+
+The picker also lists the current directory/current buffer's .farwork.json
+project and remembers file-project paths after successful connection. Settings
+are never copied: every connection rereads the file and verifies trust, even
+from another directory. Changed contents require renewed approval. Listing a
+project does not trust or execute it. Existing connections keep their settings.
+Removing the marker hides a remembered file-only project from the picker.
+
+Commands use Farwork prefixes; former Remote/Upload names have no aliases.
+Update custom mappings to the commands above.
 
 BEHAVIOR                                          *farwork-behavior*
 Local files overwrite corresponding remote files. Git metadata, virtual
 environments and build outputs are excluded. Deletions are not propagated.
-RemoteStart checks that Git HEAD and branch match; it does not reconcile
+FarworkStart checks that Git HEAD and branch match; it does not reconcile
 history by default or run remote stash/reset/checkout. Interrupted first-time
-downloads resume on reconnect without replacing existing local files. UploadStart has no Git guard.
+downloads resume on reconnect without replacing existing local files. FarworkUploadStart has no Git guard.
 Queues live in memory. Save buffers before quitting. Use one uploading editor
 per remote project. C++ language-server requests require a live connection.
 
-Saved state uses remote-projects.json and upload-projects.json under
+Saved state uses remote-projects.json, upload-projects.json and
+project-roots.json (file-project paths only, no settings or trust) under
 stdpath('state'), retaining settings from the original dotfiles integration.
 
 API                                               *farwork-api*
@@ -133,6 +146,20 @@ local language servers available. Choose an appropriate build_command. Paths are
 absolute remote paths. Neovim asks to trust the file before using it, including
 when contents change. Denied/invalid files stop connection setup.
 
+TRUST                                             *:FarworkTrust*
+                                                  *farwork-trust*
+:FarworkTrust finds .farwork.json from the current file, falling back to cwd.
+It opens a read-only split and offers Cancel (default) or Trust this config.
+Approval trusts the displayed, unmodified buffer through vim.secure.trust.
+Changed or renamed buffers require a new review. No connection starts from
+this command; run :FarworkStart afterwards. Previously denied files can be
+reviewed and approved this way too.
+
+:FarworkTrust! removes the saved decision through Neovim's trust database.
+It does not stop an active connection/upload. Future connections must review
+the config again. Content changes invalidate approval automatically.
+The built-in :trust command remains available for managing Neovim trust.
+
 Enable automatic connections once in your Neovim config:
 >
   require("farwork").setup({ auto_connect = true })
@@ -141,14 +168,14 @@ Default: false. Applies to saved projects, Lua profiles and project files.
 Discovery walks upward from the current file (cwd for an empty buffer), stopping
 at a marker or the nearest Git root, inclusive. The deepest matching marker or
 saved/Lua root wins. Lua fields override JSON; JSON replaces saved settings.
-No arbitrary repository connects. Failed/cancelled attempts require :RemoteStart
+No arbitrary repository connects. Failed/cancelled attempts require :FarworkStart
 to retry. An active project is never automatically replaced by another one.
 
 The environment command applies to discovery, clangd, builds, checks, Git
 synchronization and recovery helpers.
-Local Git hooks are NOT forwarded. Use :RemoteCheck for remote staged checks.
+Local Git hooks are NOT forwarded. Use :FarworkCheck for remote staged checks.
 
-:RemoteCheck                                     *:RemoteCheck*
+:FarworkCheck                                     *:FarworkCheck*
     Open an output split immediately, streaming progress while hooks run.
     Run pre-commit on staged added/modified files in an isolated remote copy of
     the local index, using the project environment. ! checks all index files.
@@ -170,8 +197,8 @@ Rebases, branch switches, deleted/renamed paths, staged remote work, and mismatc
 contents still pause uploads. Default: false. This does not create local commits.
 
 RECOVERY                                         *farwork-recovery*
-                                                 *:RemoteDoctor*
-Run :RemoteDoctor when an upload error tells you Git histories differ. It holds
+                                                 *:FarworkDoctor*
+Run :FarworkDoctor when an upload error tells you Git histories differ. It holds
 uploads (new saves remain queued), opens a report with both commits and affected
 paths, and offers a repair only when the proposed writes are verifiable. Cancel
 is the default. No repair runs until you select it. The plan is checked again
@@ -194,14 +221,14 @@ renamed, symlinked or protected paths manually. The report names the reason and
 next step. See README's recovery table for details. Never blindly delete locks
 or clean/stash a remote venv.
 
-On success the existing queue resumes. If uploading was stopped, :RemoteStart
+On success the existing queue resumes. If uploading was stopped, :FarworkStart
 reconnects. On cancellation/failure the queue stays paused. An interrupted
 repair may have updated some verified files; its error reports the backup.
-Rerun :RemoteDoctor to inspect the new state. Do not operate another Git process
+Rerun :FarworkDoctor to inspect the new state. Do not operate another Git process
 or uploading editor on that checkout while recovery runs.
 
-Daily: save, :UploadWait successfully, commit locally. Rebase: finish uploads,
-:UploadStop, finish the rebase locally, then :RemoteDoctor. A push alone does not
+Daily: save, :FarworkUploadWait successfully, commit locally. Rebase: finish uploads,
+:FarworkUploadStop, finish the rebase locally, then :FarworkDoctor. A push alone does not
 update the remote working checkout.
 
  vim:tw=78:ts=8:ft=help:norl:

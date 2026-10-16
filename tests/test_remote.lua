@@ -103,7 +103,7 @@ require("farwork.config").setup({
   build_command = function(project) return { temp .. "/bin/record-build", "--build", project.build, "--target", "example" } end,
 })
 mod.setup()
-vim.cmd.RemoteStart()
+vim.cmd.FarworkStart()
 assert(vim.wait(10000, function() return not mod.status().connecting end, 20))
 assert(vim.fn.filereadable(root .. "/.git/farwork-bootstrap.json") == 1)
 assert(vim.fn.filereadable(root .. "/" .. recipe) == 0)
@@ -161,14 +161,14 @@ assert(vim.wait(5000, function() return require("farwork.upload").idle(root) end
 assert(vim.fn.readfile(remote .. "/main.cpp")[2]:find("+ 1", 1, true))
 assert(uploaded_notification, "Clangd must be notified after completed uploads")
 local old_id = client.id
-vim.cmd.RemoteRefresh()
+vim.cmd.FarworkRefresh()
 assert(vim.wait(10000, function()
   for _, c in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })) do
     if c.id ~= old_id and c.initialized then return true end
   end
   return false
 end, 20), "Refresh must replace remote clangd")
-vim.cmd.RemoteDiff()
+vim.cmd.FarworkDiff()
 assert(vim.wait(5000, function() return vim.b.remote_git_diff == true end, 20))
 assert(vim.bo.filetype == "diff" and not vim.bo.modifiable)
 local diff = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
@@ -176,13 +176,13 @@ assert(diff:find("-older remote source", 1, true))
 assert(diff:find("+int main() { return answer() + 1; }", 1, true))
 vim.cmd.close()
 git("add", "main.cpp")
-vim.cmd("RemoteDiff!")
+vim.cmd("FarworkDiff!")
 assert(vim.wait(5000, function() return vim.b.remote_git_diff == true end, 20))
 assert(table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n"):find("+int main()", 1, true))
 vim.cmd.close()
 local recorded
 vim.fn.jobstart = function(cmd, opts) recorded = { cmd = cmd, opts = opts }; return 1 end
-vim.cmd("RemoteBuild -j 2")
+vim.cmd("FarworkBuild -j 2")
 assert(vim.wait(10000, function() return recorded ~= nil end, 20), table.concat(notices, "\n"))
 assert(recorded and recorded.opts.term and recorded.cmd[#recorded.cmd]:find("--build", 1, true))
 assert(recorded.cmd[#recorded.cmd]:find("example", 1, true), "Custom build target must reach the remote command")
@@ -196,7 +196,7 @@ assert(real_system({ "git", "-C", root, "add", "main.cpp" }, { text = true }):wa
 local local_index = real_system({ "git", "-C", root, "write-tree" }, { text = true }):wait().stdout
 vim.cmd.cd(vim.fn.fnameescape(root .. "/src"))
 assert(mod.project_root() == root, "Nested directories must resolve the saved project")
-vim.cmd.RemoteStart()
+vim.cmd.FarworkStart()
 assert(vim.wait(10000, function()
   local count = 0
   for _, notice in ipairs(notices) do
@@ -210,7 +210,7 @@ assert(vim.wait(10000, function()
   local clients = vim.lsp.get_clients({ name = "remote_clangd" })
   return #clients == 1 and clients[1].initialized
 end, 20), "Reconnect must finish replacing the old language server")
--- A fresh module instance simulates restarting Neovim without RemoteStart.
+-- A fresh module instance simulates restarting Neovim without FarworkStart.
 package.loaded["farwork.remote"] = nil
 local fresh = require("farwork.remote")
 local local_started = false
@@ -230,7 +230,7 @@ assert(real_system({ "git", "-C", root, "write-tree" }, { text = true }):wait().
 for _, c in ipairs(vim.lsp.get_clients()) do c:stop(true) end
 assert(vim.wait(5000, function() return #vim.lsp.get_clients() == 0 end, 20))
 vim.api.nvim_buf_set_lines(buf, 1, 2, false, { "int main() { return answer() + 2; }" })
-vim.cmd.RemoteRefresh()
+vim.cmd.FarworkRefresh()
 assert(vim.wait(10000, function()
   client = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
   return client and client.initialized
@@ -273,7 +273,7 @@ for _, candidate in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "remote_cla
   if candidate.id ~= previous_client.id and not candidate:is_stopped() then sync_client = candidate end
 end
 assert(sync_client and sync_client.id ~= previous_client.id, "Reconnect must not reuse a retiring client")
-vim.cmd.RemoteSync()
+vim.cmd.FarworkSync()
 assert(vim.wait(10000, function() return require("farwork.upload").idle(root) end, 20))
 assert(not sync_client:is_stopped(), "Manual file sync must not restart the LSP")
 -- A trusted project file connects with no saved or Lua profile and no prompts.
@@ -308,7 +308,7 @@ assert(local_allowed, "Plain projects must not disable local language servers")
 vim.api.nvim_buf_call(buf, function() vim.cmd.write() end)
 assert(vim.wait(10000, function() return require("farwork.upload").idle(root) end, 20))
 recorded = nil
-vim.cmd.RemoteBuild()
+vim.cmd.FarworkBuild()
 assert(vim.wait(10000, function() return recorded ~= nil end, 20), table.concat(notices, "\n"))
 assert(recorded.cmd[#recorded.cmd]:find("FARWORK_TEST=active", 1, true))
 vim.secure.read = secure_read

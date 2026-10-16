@@ -73,7 +73,7 @@ def preview(root, wanted, own_lock=False):
     desired = wanted['tree']
     reasons, rows = [], []
     if not wanted['local_clean']:
-        reasons.append('Local tracked edits are not committed. Finish your local commit, then run :RemoteDoctor again.')
+        reasons.append('Local tracked edits are not committed. Finish your local commit, then run :FarworkDoctor again.')
     if not current['branch'] or current['branch'] != wanted['target']['branch']:
         reasons.append('Branches differ or HEAD is detached. Choose the intended branch on each side before recovery.')
     if git(root, 'diff', '--cached', '--quiet', check=False).returncode:
@@ -94,7 +94,7 @@ def preview(root, wanted, own_lock=False):
             row['actual'] = actual
             if actual == after: row['state'] = 'already_uploaded'
             elif actual == before: row['state'] = 'pending_upload'
-            else: raise RuntimeError('Remote-only or conflicting edits: ' + name + '. Review with :RemoteDiff; preserve/merge them locally before retrying.')
+            else: raise RuntimeError('Remote-only or conflicting edits: ' + name + '. Review with :FarworkDiff; preserve/merge them locally before retrying.')
         except RuntimeError as error:
             reasons.append(str(error))
         rows.append(row)
@@ -107,7 +107,7 @@ def preview(root, wanted, own_lock=False):
 def repair(root, wanted, approved, pack):
     fresh = preview(root, wanted)
     if fresh != approved or not fresh['allowed']:
-        raise RuntimeError('The recovery plan changed or is blocked. Run :RemoteDoctor again; nothing was repaired.')
+        raise RuntimeError('The recovery plan changed or is blocked. Run :FarworkDoctor again; nothing was repaired.')
     git(root, 'unpack-objects', '-q', data=pack)
     target = wanted['target']['head']
     if tree(root, target) != wanted['tree']:
@@ -118,7 +118,7 @@ def repair(root, wanted, approved, pack):
     owned, temp_index, backup = True, None, None
     try:
         if preview(root, wanted, own_lock=True) != approved:
-            raise RuntimeError('Remote changed before recovery. Run :RemoteDoctor again.')
+            raise RuntimeError('Remote changed before recovery. Run :FarworkDoctor again.')
         fd, temp_index = tempfile.mkstemp(prefix='nvim-recovery-', dir=index.parent)
         os.close(fd); os.unlink(temp_index)
         env = {'GIT_INDEX_FILE': temp_index}
@@ -156,7 +156,7 @@ def repair(root, wanted, approved, pack):
             raise
         return dict(backup=backup, head=target)
     except Exception as error:
-        raise RuntimeError(str(error) + ('\nRecovery backup: ' + backup + '. Some verified files may have been updated; run :RemoteDoctor again.' if backup else '')) from error
+        raise RuntimeError(str(error) + ('\nRecovery backup: ' + backup + '. Some verified files may have been updated; run :FarworkDoctor again.' if backup else '')) from error
     finally:
         lock.close()
         if owned and lock_path.exists(): lock_path.unlink()
@@ -188,21 +188,21 @@ def main():
             report['allowed'] = False
             report['reasons'].append('Remote commits are missing locally. Fetch and inspect the remote branch first: git fetch '
                                      + shlex.quote(host + ':' + remote) + ' ' + shlex.quote(report['current']['branch'])
-                                     + '; then inspect git log FETCH_HEAD and rerun :RemoteDoctor.')
+                                     + '; then inspect git log FETCH_HEAD and rerun :FarworkDoctor.')
         plan = dict(root=root, host=host, remote=remote, request=wanted, report=report)
         Path(plan_file).write_text(json.dumps(plan))
         print(json.dumps(report))
     elif mode == 'apply':
         plan = json.loads(Path(plan_file).read_text())
         if (root, host, remote) != (plan['root'], plan['host'], plan['remote']) or request(root) != plan['request']:
-            raise RuntimeError('Local project changed since review. Run :RemoteDoctor again.')
+            raise RuntimeError('Local project changed since review. Run :FarworkDoctor again.')
         old, new = plan['report']['current']['head'], plan['request']['target']['head']
         if git(root, 'cat-file', '-e', old, check=False).returncode:
             raise RuntimeError('Remote history is missing locally. Fetch and review the remote commits before recovery.')
         pack = git(root, 'pack-objects', '--revs', '--stdout', data=(new + '\n^' + old + '\n').encode()).stdout
         result = remote_call(host, 'remote-repair', remote, {**plan, 'pack': base64.b64encode(pack).decode()}, environment)
         if request(root) != plan['request']:
-            raise RuntimeError('Local project changed during repair. Remote recovery completed, but uploads remain paused; run :RemoteDoctor again.')
+            raise RuntimeError('Local project changed during repair. Remote recovery completed, but uploads remain paused; run :FarworkDoctor again.')
         print(json.dumps(result))
     else: raise RuntimeError('Unknown recovery operation')
 

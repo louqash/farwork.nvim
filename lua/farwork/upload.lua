@@ -38,7 +38,7 @@ function M.status()
 end
 
 local function register_status()
-  vim.api.nvim_create_user_command("UploadStatus", function() notify(status()) end,
+  vim.api.nvim_create_user_command("FarworkUploadStatus", function() notify(status()) end,
     { force = true, desc = "Show upload state, including before connecting" })
 end
 
@@ -98,7 +98,7 @@ pump = function()
           s.pending[relative] = true
         end
         s.failed = label .. ": " .. (result.stderr or "rsync failed")
-        notify(s.failed .. " — fix the problem, then :UploadRetry", vim.log.levels.ERROR)
+        notify(s.failed .. " — fix the problem, then :FarworkUploadRetry", vim.log.levels.ERROR)
       else
         if initial or settings.options.notify_uploads then notify(label .. " uploaded") end
         if initial and s.opts.on_initial_sync then s.opts.on_initial_sync() end
@@ -153,7 +153,7 @@ end
 function M.start(opts)
   opts = opts or {}
   if session and (session.paused or session.busy or #session.queue > 0) then
-    error("Uploads are pending; finish them or use :UploadStop before changing projects")
+    error("Uploads are pending; finish them or use :FarworkUploadStop before changing projects")
   end
   local root = assert(vim.uv.fs_realpath(opts.root or vim.fn.getcwd()), "Invalid local root")
   assert(root ~= "/", "Choose a project directory, not /")
@@ -185,16 +185,16 @@ function M.start(opts)
     end,
   })
   register_status()
-  vim.api.nvim_create_user_command("UploadWait", function()
+  vim.api.nvim_create_user_command("FarworkUploadWait", function()
     vim.wait(30000, function()
       return not session or session.paused or session.failed or (not session.busy and #session.queue == 0)
     end, 50)
     notify(status())
   end, { force = true })
-  vim.api.nvim_create_user_command("UploadRetry", function()
+  vim.api.nvim_create_user_command("FarworkUploadRetry", function()
     if session then session.failed = nil; pump() end
   end, { force = true })
-  vim.api.nvim_create_user_command("UploadStop", function()
+  vim.api.nvim_create_user_command("FarworkUploadStop", function()
     if session and session.paused then
       notify("Finish or cancel the recovery dialog first", vim.log.levels.WARN); return
     end
@@ -247,7 +247,7 @@ function M.hold(root)
   local s = session
   if not s then return function() end end
   if s.root ~= root then return nil, "Another project owns the upload queue" end
-  if s.busy then return nil, "An upload is running. Wait for it to finish, then run :RemoteDoctor" end
+  if s.busy then return nil, "An upload is running. Wait for it to finish, then run :FarworkDoctor" end
   if s.paused then return nil, "Recovery review is already open" end
   s.paused = true
   local released = false
@@ -257,7 +257,7 @@ function M.hold(root)
     if session ~= s then return end
     s.paused = nil
     if resume then s.failed = nil; pump()
-    elseif #s.queue > 0 then s.failed = s.failed or "Recovery review ended; use :RemoteDoctor or :UploadRetry" end
+    elseif #s.queue > 0 then s.failed = s.failed or "Recovery review ended; use :FarworkDoctor or :FarworkUploadRetry" end
   end
 end
 
@@ -278,7 +278,7 @@ function M.setup(opts)
   opts = opts or {}
   register_status()
   local state_file = settings.state_dir() .. "/upload-projects.json"
-  vim.api.nvim_create_user_command("UploadStart", function(args)
+  vim.api.nvim_create_user_command("FarworkUploadStart", function(args)
     local root = vim.uv.fs_realpath(vim.fn.getcwd())
     if not root then notify("Cannot resolve current directory", vim.log.levels.ERROR); return end
     if session and (session.paused or session.busy or #session.queue > 0) then
@@ -320,7 +320,7 @@ function M.setup(opts)
     end
   end, { nargs = "?", force = true, desc = "Upload current project, then upload on save" })
   if opts.keymaps then
-    vim.keymap.set("n", "<leader>us", "<cmd>UploadStart<CR>", { desc = "Start project upload" })
+    vim.keymap.set("n", "<leader>us", "<cmd>FarworkUploadStart<CR>", { desc = "Start project upload" })
     vim.keymap.set("n", "<leader>ui", function() notify(status()) end, { desc = "Upload status" })
   end
 end

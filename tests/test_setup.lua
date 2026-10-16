@@ -2,9 +2,13 @@ vim.opt.rtp:prepend(vim.fn.getcwd())
 local plugin = require("farwork")
 plugin.setup()
 plugin.setup()
-for _, name in ipairs({ "RemoteCheck", "RemoteStart", "RemoteStatus", "RemoteRefresh", "RemoteBuild", "RemoteDiff", "RemoteSync", "RemoteProjects", "UploadStart" }) do
+for _, name in ipairs({ "FarworkCheck", "FarworkStart", "FarworkStatus", "FarworkRefresh", "FarworkBuild", "FarworkDiff", "FarworkSync", "FarworkProjects", "FarworkUploadStart" }) do
   assert(vim.fn.exists(":" .. name) == 2, "Missing command " .. name)
 end
+for _, name in ipairs({ "RemoteStart", "RemoteProjects", "RemoteTrust", "UploadStart", "UploadStop" }) do
+  assert(vim.fn.exists(":" .. name) == 0, "Legacy command must not remain: " .. name)
+end
+assert(vim.fn.exists(":FarworkTrust") == 2)
 assert(not plugin.is_project())
 assert(not plugin.status().upload.enabled and not plugin.status().connecting)
 assert(vim.fn.maparg("<leader>rs", "n") == "", "Keymaps must be opt-in")
@@ -40,7 +44,7 @@ vim.ui.select = function(items, opts, callback)
   selected = true
   callback(nil)
 end
-vim.cmd.RemoteProjects()
+vim.cmd.FarworkProjects()
 assert(selected and not plugin.status().connecting, "Cancelling the project picker must not connect")
 vim.ui.input = function(_, callback) callback(nil) end
 plugin.start({ root = tmp, reset = true })

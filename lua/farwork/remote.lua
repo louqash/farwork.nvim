@@ -98,7 +98,7 @@ function M.local_clangd_root(buf, on_dir)
   if project and project.lsp ~= false then
     if not reminded[selected] then
       reminded[selected] = true
-      tell("This project uses remote clangd. Run :RemoteStart to connect.")
+      tell("This project uses remote clangd. Run :FarworkStart to connect.")
     end
     return
   end
@@ -172,6 +172,8 @@ local function activate(root, config, change_directory)
         return
       end
       s.ready = true
+      local remembered, err = pcall(require("farwork.projects").remember, root)
+      if not remembered then tell("Could not remember project location: " .. tostring(err), vim.log.levels.WARN) end
       if change_directory then
         local changed, err = pcall(vim.cmd.cd, vim.fn.fnameescape(root))
         if not changed then tell("Connected, but could not change directory: " .. tostring(err), vim.log.levels.ERROR) end
@@ -351,16 +353,16 @@ function M.start(options)
   local draining = require("farwork.upload").drain(root, function(completed)
     connecting = false
     if completed then M.start(options)
-    else tell("Reconnect cancelled because the upload queue was stopped. Run :RemoteStart again when ready.") end
+    else tell("Reconnect cancelled because the upload queue was stopped. Run :FarworkStart again when ready.") end
   end)
   if draining == "waiting" then
     connecting = true
-    tell("Finishing pending uploads before reconnecting. Failed uploads are being retried; use :UploadStatus for details.")
+    tell("Finishing pending uploads before reconnecting. Failed uploads are being retried; use :FarworkUploadStatus for details.")
     return
   elseif draining == "paused" then
     tell("Finish or cancel the recovery dialog before reconnecting"); return
   elseif draining == "different" then
-    tell("Another project's uploads are pending. Use :UploadRetry and :UploadWait there, or :UploadStop to discard its queue.", vim.log.levels.WARN)
+    tell("Another project's uploads are pending. Use :FarworkUploadRetry and :FarworkUploadWait there, or :FarworkUploadStop to discard its queue.", vim.log.levels.WARN)
     return
   end
   local ok, settings = pcall(read_settings)
@@ -461,10 +463,10 @@ end
 function M.setup(opts)
   opts = opts or {}
   require("farwork.sync").setup()
-  vim.api.nvim_create_user_command("RemoteRefresh", function()
-    if not active or not active.ready then tell("Run :RemoteStart first"); return end
+  vim.api.nvim_create_user_command("FarworkRefresh", function()
+    if not active or not active.ready then tell("Run :FarworkStart first"); return end
     if not active.lsp then tell("No remote language server configured"); return end
-    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :UploadStatus"); return end
+    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :FarworkUploadStatus"); return end
     local client = active.client and vim.lsp.get_client_by_id(active.client)
     if client then
       retiring_clients[client.id] = true
@@ -479,38 +481,48 @@ function M.setup(opts)
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do attach(buf) end
     tell("Restarted remote clangd to refresh diagnostics")
   end, { force = true, desc = "Restart remote clangd without resyncing the project" })
-  vim.api.nvim_create_user_command("RemoteStatus", function()
+  vim.api.nvim_create_user_command("FarworkStatus", function()
     local clients = {}
     for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
       table.insert(clients, client.name .. (client.initialized and " (initialized)" or " (starting)"))
     end
     local message = active and (active.config.host .. ":" .. active.config.remote
       .. "\nBuild: " .. active.config.build .. "\n" .. (active.ready and "Initial sync complete" or "Waiting for initial sync"))
-      or "Not connected. Run :RemoteStart from the local project root."
+      or "Not connected. Run :FarworkStart from the local project root."
     tell(message .. "\nCurrent buffer LSP: " .. (#clients > 0 and table.concat(clients, ", ") or "none")
       .. "\nUploads: " .. require("farwork.upload").status().message)
   end, { force = true, desc = "Show remote context and language servers for the current buffer" })
-  vim.api.nvim_create_user_command("RemoteStart", function(args)
+  vim.api.nvim_create_user_command("FarworkStart", function(args)
     M.start({ reset = args.bang, destination = args.args ~= "" and args.args or nil })
   end, { nargs = "?", bang = true, force = true, desc = "Connect using saved settings or host:/path; ! reconfigures" })
-  vim.api.nvim_create_user_command("RemoteProjects", function()
+  vim.api.nvim_create_user_command("FarworkProjects", function()
     local ok, saved = pcall(read_settings)
     if not ok then tell(tostring(saved), vim.log.levels.ERROR); return end
     local profiles = vim.tbl_extend("force", saved, plugin_config.options.projects)
-    local roots = vim.tbl_keys(profiles)
+    local projects = require("farwork.projects")
+    local loaded, known = pcall(projects.known_roots)
+    if not loaded then tell(tostring(known), vim.log.levels.ERROR); return end
+    local name = vim.api.nvim_buf_get_name(0)
+    for _, path in ipairs({ vim.fn.getcwd(), name }) do
+      local root = path ~= "" and projects.file_root(path)
+      if root then known[root] = true end
+    end
+    for root in pairs(profiles) do known[root] = true end
+    local roots = vim.tbl_keys(known)
     table.sort(roots)
-    if #roots == 0 then tell("No saved projects. Run :RemoteStart from a local project first."); return end
+    if #roots == 0 then tell("No saved projects. Run :FarworkStart from a local project first."); return end
     vim.ui.select(roots, { prompt = "Connect to project:", format_item = function(root)
+      if vim.fn.filereadable(root .. "/.farwork.json") == 1 then return root .. " → .farwork.json" end
       return root .. " → " .. profiles[root].host .. ":" .. profiles[root].remote
     end }, function(root) if root then M.start({ root = root, change_directory = true }) end end)
   end, { force = true, desc = "Connect to a saved project and switch to its local root" })
-  vim.api.nvim_create_user_command("RemoteSync", function()
-    if not active then tell("Run :RemoteStart first"); return end
+  vim.api.nvim_create_user_command("FarworkSync", function()
+    if not active then tell("Run :FarworkStart first"); return end
     require("farwork.upload").sync(active.root, function(completed)
       if completed then tell("Saved project files synchronized") end
     end)
   end, { force = true, desc = "Sync saved files and retry queued uploads without restarting clangd" })
-  vim.api.nvim_create_user_command("RemoteDoctor", function()
+  vim.api.nvim_create_user_command("FarworkDoctor", function()
     if active then require("farwork.recovery").start(active.root, vim.deepcopy(active.config)); return end
     local root = M.project_root()
     if not root then tell("Open a local project first"); return end
@@ -519,16 +531,16 @@ function M.setup(opts)
       return vim.tbl_extend("force", file or read_settings()[root] or {}, plugin_config.options.projects[root] or {})
     end)
     if not ok then tell(tostring(config), vim.log.levels.ERROR); return end
-    if not config.host or not config.remote then tell("Configure this project with :RemoteStart first"); return end
+    if not config.host or not config.remote then tell("Configure this project with :FarworkStart first"); return end
     require("farwork.recovery").start(root, config)
   end, { force = true, desc = "Explain sync problems and review a safe recovery plan" })
-  vim.api.nvim_create_user_command("RemoteCheck", function(args)
-    if not active or not active.ready then tell("Run :RemoteStart first"); return end
+  vim.api.nvim_create_user_command("FarworkCheck", function(args)
+    if not active or not active.ready then tell("Run :FarworkStart first"); return end
     require("farwork.check").start(active.root, vim.deepcopy(active.config), args.bang)
   end, { bang = true, force = true, desc = "Check staged snapshot remotely and return fixes; ! checks all index files" })
-  vim.api.nvim_create_user_command("RemoteBuild", function(args)
-    if not active or not active.ready then tell("Run :RemoteStart first"); return end
-    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :UploadStatus"); return end
+  vim.api.nvim_create_user_command("FarworkBuild", function(args)
+    if not active or not active.ready then tell("Run :FarworkStart first"); return end
+    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :FarworkUploadStatus"); return end
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
       if M.owns_buffer(buf) and vim.bo[buf].modified then tell("Save project buffers before building"); return end
     end
@@ -550,9 +562,9 @@ function M.setup(opts)
         .. "; " .. table.concat(command, " ")), { term = true })
     end)
   end, { nargs = "*", force = true, desc = "Sync and build remotely; optional arguments are appended" })
-  vim.api.nvim_create_user_command("RemoteDiff", function(args)
-    if not active or not active.ready then tell("Run :RemoteStart first"); return end
-    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :UploadStatus"); return end
+  vim.api.nvim_create_user_command("FarworkDiff", function(args)
+    if not active or not active.ready then tell("Run :FarworkStart first"); return end
+    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :FarworkUploadStatus"); return end
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
       if M.owns_buffer(buf) and vim.bo[buf].modified then tell("Save project buffers before viewing the remote diff"); return end
     end
@@ -580,9 +592,9 @@ function M.setup(opts)
     end))
   end, { bang = true, force = true, desc = "View remote Git diff; ! shows staged changes" })
   if opts.keymaps then
-    vim.keymap.set("n", "<leader>rs", "<cmd>RemoteStart<CR>", { desc = "Start remote C++ project" })
-    vim.keymap.set("n", "<leader>rb", "<cmd>RemoteBuild<CR>", { desc = "Build remote project" })
-    vim.keymap.set("n", "<leader>rd", "<cmd>RemoteDiff<CR>", { desc = "View remote Git diff" })
+    vim.keymap.set("n", "<leader>rs", "<cmd>FarworkStart<CR>", { desc = "Start remote C++ project" })
+    vim.keymap.set("n", "<leader>rb", "<cmd>FarworkBuild<CR>", { desc = "Build remote project" })
+    vim.keymap.set("n", "<leader>rd", "<cmd>FarworkDiff<CR>", { desc = "View remote Git diff" })
   end
 end
 

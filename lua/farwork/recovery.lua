@@ -29,7 +29,7 @@ function M.start(root, config)
       { text = true }, vim.schedule_wrap(function(result)
         if result.code ~= 0 then
           render({ "Recovery stopped; uploads remain paused.", result.stderr or "Unknown error",
-            "Review git status locally/remotely as indicated above, then run :RemoteDoctor again.", "Plan: " .. plan_file })
+            "Review git status locally/remotely as indicated above, then run :FarworkDoctor again.", "Plan: " .. plan_file })
           finish(false); return
         end
         local parsed, data = pcall(vim.json.decode, result.stdout or "")
@@ -62,9 +62,9 @@ function M.start(root, config)
     if not report.allowed then
       table.insert(lines, "\nAutomatic recovery is blocked:")
       vim.list_extend(lines, report.reasons)
-      table.insert(lines, "\nReview remote edits with :RemoteDiff or git diff in the remote terminal.")
+      table.insert(lines, "\nReview remote edits with :FarworkDiff or git diff in the remote terminal.")
       table.insert(lines, "Preserve/merge wanted changes locally; do not stash or clean the remote venv.")
-      table.insert(lines, "Once resolved, run :RemoteDoctor again. Saved plan: " .. plan_file)
+      table.insert(lines, "Once resolved, run :FarworkDoctor again. Saved plan: " .. plan_file)
       render(lines); finish(false); return
     end
     local needs_repair = not report.aligned or #report.paths > 0
@@ -79,14 +79,14 @@ function M.start(root, config)
     vim.ui.select({ "Cancel; keep uploads paused", action }, { prompt = "Review the recovery plan in the split:" }, function(choice)
       if choice ~= action then finish(false); return end
       if not needs_repair then
-        table.insert(lines, "\nUploads resumed. If uploading was stopped, run :RemoteStart.")
+        table.insert(lines, "\nUploads resumed. If uploading was stopped, run :FarworkStart.")
         render(lines); finish(true); return
       end
       table.insert(lines, "\nRechecking and applying the reviewed plan…")
       render(lines)
       run("apply", function(result)
         table.insert(lines, "\nRecovery complete. Backup: " .. result.backup)
-        table.insert(lines, "Uploads resumed. If uploading was stopped, run :RemoteStart.")
+        table.insert(lines, "Uploads resumed. If uploading was stopped, run :FarworkStart.")
         render(lines); finish(true)
       end)
     end)

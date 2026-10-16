@@ -25,7 +25,7 @@ local function choose(cancel)
     assert(#items == 1 and items[1] == root)
     callback(not cancel and root or nil)
   end
-  vim.cmd.RemoteProjects()
+  vim.cmd.FarworkProjects()
 end
 choose(true)
 assert(not discovery and vim.fn.getcwd() == empty, "Cancel must preserve cwd")
@@ -53,6 +53,21 @@ remote.start({ root = root })
 discover()
 transfer.on_initial_sync()
 assert(vim.fn.getcwd() == empty, "Ordinary start must preserve cwd")
+-- A file profile is discoverable before connection and persists only its path.
+require("farwork.config").options.projects = {}
+vim.fn.delete(tmp .. "/state/remote-projects.json")
+vim.fn.writefile({ vim.json.encode({ host = "fixture", remote = "/workspace", lsp = false }) }, root .. "/.farwork.json")
+vim.secure.read = function(path) return table.concat(vim.fn.readfile(path), "\n") end
+vim.cmd.cd(vim.fn.fnameescape(root))
+transfer = nil
+choose(false)
+discover()
+assert(vim.fn.filereadable(tmp .. "/state/project-roots.json") == 0)
+transfer.on_initial_sync()
+assert(require("farwork.projects").known_roots()[root])
+assert(vim.fn.filereadable(tmp .. "/state/remote-projects.json") == 0, "Do not copy file settings")
+vim.cmd.cd(vim.fn.fnameescape(empty))
+choose(true)
 vim.cmd.cd("/")
 vim.fn.delete(tmp, "rf")
 print("PASS: project picker changes cwd only after successful setup/upload, once; cancel/failure/start preserve cwd")
