@@ -1,8 +1,9 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import importlib.util
 import os
 import json
-import sys
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
@@ -30,6 +31,17 @@ class Recovery(unittest.TestCase):
         self.assertEqual((self.remote/'.venv/precious').read_text(), 'keep venv')
         self.assertEqual((self.remote/'build/precious').read_text(), 'keep build')
         self.assertFalse((self.remote/'.git/index.lock').exists())
+    def test_cli_applies_project_environment(self):
+        binary = self.base / 'bin'; binary.mkdir()
+        ssh = binary / 'ssh'
+        ssh.write_text('#!/bin/bash\nexec bash -c "${!#}"\n'); ssh.chmod(0o700)
+        result = subprocess.run([sys.executable, r.__file__, 'diagnose', str(self.local),
+            'fixture', str(self.remote), str(self.base / 'plan.json'),
+            'echo recovery-environment >&2; exit 23'], capture_output=True, text=True,
+            env={**os.environ, 'PATH': str(binary) + os.pathsep + os.environ['PATH']})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('recovery-environment', result.stderr)
+        self.preserved()
     def test_pending_uploads_after_commit(self):
         for name in ('a','b'): (self.local/name).write_text('new\n')
         (self.remote/'a').write_text('new\n'); self.commit()

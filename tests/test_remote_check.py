@@ -1,7 +1,9 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import importlib.util
 import json
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
@@ -73,6 +75,12 @@ class Checks(unittest.TestCase):
         finally: os.environ['PATH'] = previous
         self.assertEqual((self.output / 'after/code.cpp').read_text(), 'fixed\n')
         self.assertEqual((self.root / 'code.cpp').read_text(), 'staged   \n')
+    def test_plain_command(self):
+        data = check.remote(dict(archive=check.encode(check.snapshot(self.root, self.tree)),
+            files=['code.cpp'], all=True, args='none',
+            command=['python3', '-c', 'import sys; assert len(sys.argv) == 1']))
+        self.assertEqual(data['code'], 0)
+        self.assertEqual(data['changes'], [])
     def test_symlink_and_traversal_rejected(self):
         for name in ('../oops', '/tmp/oops', '.git/config'):
             with self.assertRaises(RuntimeError): check.safe_path(self.root, name)

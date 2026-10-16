@@ -69,8 +69,10 @@ def remote(request):
         git(root, 'add', '--all')
         git(root, '-c', 'user.name=Remote checks', '-c', 'user.email=remote-check@localhost',
             '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Local staged snapshot', '--allow-empty')
-        command = request['command'] + (['--all-files'] if request['all'] else ['--files'] + ['./' + p for p in request['files']])
-        print('Running remote pre-commit…', file=sys.stderr, flush=True)
+        command = request['command']
+        if request.get('args', 'pre-commit') == 'pre-commit':
+            command = command + (['--all-files'] if request['all'] else ['--files'] + ['./' + p for p in request['files']])
+        print('Running remote checks…', file=sys.stderr, flush=True)
         process = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         chunks = []
         for chunk in iter(process.stdout.readline, b''):
@@ -128,7 +130,8 @@ def snapshot(root, tree):
     return output.getvalue()
 
 
-def run(root, host, environment, output_dir, all_files, command):
+def run(root, host, environment, output_dir, all_files, command, args="pre-commit"):
+    from transport import run_ssh
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     print('Preparing staged snapshot…', file=sys.stderr, flush=True)
@@ -139,14 +142,11 @@ def run(root, host, environment, output_dir, all_files, command):
         result = dict(code=0, output='No staged files. Stage changes first, or use :RemoteCheck! to check every file in the index.\n', changes=[])
     else:
         request = dict(archive=encode(snapshot(root, tree)), files=files,
-                       all=all_files, command=command)
+                       all=all_files, command=command, args=args)
         source = Path(__file__).read_text()
-        body = 'set -e\n' + environment + '\nexec python3 -c ' + shlex.quote(source) + ' remote'
+        command_line = 'python3 -c ' + shlex.quote(source) + ' remote'
         print('Connecting to remote check environment…', file=sys.stderr, flush=True)
-        proc = subprocess.run(['ssh', '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=60',
-                               '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=3',
-                               host, 'bash -lc ' + shlex.quote(body)], input=json.dumps(request).encode(),
-                              stdout=subprocess.PIPE)
+        proc = run_ssh(host, command_line, environment=environment, input=json.dumps(request).encode(), stderr=None)
         if proc.returncode:
             raise RuntimeError('SSH/check runner failed (exit %s); see preceding output' % proc.returncode)
         result = json.loads(proc.stdout)
@@ -203,8 +203,9 @@ if __name__ == '__main__':
         elif sys.argv[1] == 'apply':
             apply(*sys.argv[2:])
         elif sys.argv[1] == 'run':
-            root, host, environment, directory, all_files, command = sys.argv[2:]
-            run(root, host, environment, directory, all_files == 'true', json.loads(command))
+            root, host, environment, directory, all_files, command = sys.argv[2:8]
+            args = sys.argv[8] if len(sys.argv) > 8 else "pre-commit"
+            run(root, host, environment, directory, all_files == 'true', json.loads(command), args)
         else:
             raise RuntimeError('Unknown operation')
     except Exception as error:

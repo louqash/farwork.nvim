@@ -1,5 +1,6 @@
 local M = {}
 local running = false
+local process
 local source = debug.getinfo(1, "S").source:sub(2)
 local script = vim.fn.fnamemodify(source, ":h:h:h") .. "/scripts/remote_check.py"
 local function notify(message, level) vim.notify("Remote check: " .. message, level or vim.log.levels.INFO) end
@@ -25,7 +26,14 @@ function M.start(root, config, all_files)
   vim.api.nvim_win_set_buf(0, buf)
   vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = buf })
   local log = "Preparing local staged snapshot…\nResults: " .. directory .. "\n"
-  local completed = false
+  local completed, cancelled = false, false
+  vim.api.nvim_create_user_command("RemoteCheckStop", function()
+    if running and process then
+      cancelled = true
+      process:kill(15)
+      notify("Cancelling remote check; returned fixes will not be applied")
+    end
+  end, { force = true, desc = "Cancel the current remote check" })
   local function render(text)
     if not vim.api.nvim_buf_is_valid(buf) then return end
     vim.bo[buf].modifiable = true
@@ -41,10 +49,11 @@ function M.start(root, config, all_files)
       render(log)
     end)
   end
-  local function finished(process)
-    running, completed = false, true
-    if process.code ~= 0 then
-      render(log .. "\nCheck failed (exit " .. process.code .. "): " .. (process.stderr or "see output above")
+  local function finished(result)
+    running, completed, process = false, true, nil
+    if cancelled then render(log .. "\nCheck cancelled; no fixes applied."); return end
+    if result.code ~= 0 then
+      render(log .. "\nCheck failed (exit " .. result.code .. "): " .. (result.stderr or "see output above")
         .. "\nResults: " .. directory)
       notify("Check failed; see output split", vim.log.levels.ERROR)
       return
@@ -83,7 +92,7 @@ function M.start(root, config, all_files)
       if upload.status().root == root then upload.sync(root, function() end) end
     end
     local lines = vim.split(result.output or "", "\n", { plain = true })
-    table.insert(lines, 1, "Remote pre-commit exit code: " .. result.code)
+    table.insert(lines, 1, "Remote check exit code: " .. result.code)
     table.insert(lines, "Results and fixes: " .. directory)
     if blocked then
       table.insert(lines, "Fixes were NOT applied: " .. blocked)
@@ -96,9 +105,10 @@ function M.start(root, config, all_files)
       or result.code == 0 and "Checks passed" or "Checks failed; see output",
       (blocked or result.code ~= 0) and vim.log.levels.WARN or vim.log.levels.INFO)
   end
-  local ok, err = pcall(vim.system, { "python3", script, "run", root, config.host,
-    config.environment or "", directory, tostring(all_files == true), vim.json.encode(options.options.check_command) },
-    { text = true, stderr = progress }, vim.schedule_wrap(finished))
-  if not ok then running, completed = false, true; render(log .. "\n" .. tostring(err)); notify(tostring(err), vim.log.levels.ERROR) end
+  local ok, err = pcall(require("farwork.process").run, { "python3", script, "run", root, config.host,
+    config.environment or "", directory, tostring(all_files == true), vim.json.encode(options.options.check_command), options.options.check_args },
+    { text = true, stderr = progress }, vim.schedule_wrap(finished), options.options.check_timeout)
+  if not ok then running, completed = false, true; render(log .. "\n" .. tostring(err)); notify(tostring(err), vim.log.levels.ERROR)
+  else process = err end
 end
 return M

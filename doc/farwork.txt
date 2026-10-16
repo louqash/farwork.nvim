@@ -2,7 +2,9 @@
 
 SETUP                                             *farwork-setup*
 Requires Neovim 0.11+, Python 3, Git, SSH and rsync 3+ locally.
-Remote: Python 3, Git, rsync, clangd and a configured CMake project.
+Remote: Python 3.9+, Git and rsync. C/C++ mode also needs clangd and a
+compilation database. Set lsp=false in a project profile for sync/build/checks
+without remote language features; choose build_command for that project.
 >
     require('farwork').setup({ keymaps = false })
 <
@@ -13,7 +15,12 @@ Use :checkhealth farwork to check local prerequisites.
 OPTIONS                                           *farwork-options*
 keymaps          Boolean; false by default. Install optional leader mappings.
 notify_uploads   Boolean; false by default. Show successful per-file uploads.
-projects         Map local root paths to host/remote/build/environment profiles.
+projects         Map local roots to host/remote/build/environment/lsp profiles.
+git.auto_fast_forward  Boolean; false. Advance matching remote Git history.
+check_command    Argument list; defaults to pre-commit run --hook-stage pre-commit.
+check_args       "pre-commit" appends file flags; "none" leaves argv unchanged.
+operation_timeout  Positive seconds; 120 by default, for setup/Git/recovery.
+check_timeout    Positive seconds; 600 by default, for remote checks.
 rsync            Local executable name/path; defaults to "rsync".
 clangd_args      Remote clangd flags; default background-index and clang-tidy.
 build_command    Function(project) returning argv; default cmake --build.
@@ -39,13 +46,15 @@ COMMANDS                                          *farwork-commands*
 :UploadWait          Wait up to 30 seconds for uploads.
 :RemoteDoctor        Diagnose upload/Git errors and review a guarded repair.
 :UploadRetry         Retry a failed queue without discarding saved files.
-:UploadStop          Stop an idle uploader and discard its pending queue.
+:UploadStop          Cancel the active transfer/guard and discard its queue.
+:RemoteCheckStop     Cancel a running check without applying returned fixes.
 
 BEHAVIOR                                          *farwork-behavior*
 Local files overwrite corresponding remote files. Git metadata, virtual
 environments and build outputs are excluded. Deletions are not propagated.
 RemoteStart checks that Git HEAD and branch match; it does not reconcile
-history by default or run remote stash/reset/checkout. UploadStart has no Git guard.
+history by default or run remote stash/reset/checkout. Interrupted first-time
+downloads resume on reconnect without replacing existing local files. UploadStart has no Git guard.
 Queues live in memory. Save buffers before quitting. Use one uploading editor
 per remote project. C++ language-server requests require a live connection.
 
@@ -89,7 +98,7 @@ LSP INTEGRATION                                    *farwork-lsp*
 Use require('farwork').local_clangd_root as vim.lsp.config.clangd.root_dir
 so local clangd does not start in known remote projects.
 
-Farwork detaches local clangd from active project buffers. Keep your usual
+In clangd mode, Farwork detaches local clangd from active project buffers. Keep your usual
 LspAttach callback; no Farwork-specific early return is needed. The remote
 client is named "remote_clangd".
 
@@ -97,7 +106,7 @@ With keymaps=true, Farwork installs buffer-local <leader>ch for local and
 remote clangd. No source/header request code is needed in your configuration.
 For a custom mapping, call require('farwork').switch_source_header(bufnr).
 The optional bufnr defaults to the current buffer. Remote clangd is preferred;
-local clangd is used only outside an active remote project.
+local clangd is used when Farwork does not own the buffer's language server.
 
 
 PROJECT FILES AND AUTO-CONNECT                     *farwork-project-file*
@@ -111,7 +120,9 @@ Place .farwork.json at the local project root:
     "environment": "source /home/dev/my-app/.venv/bin/activate"
   }
 <
-Host and remote are required. Build and environment are optional. Paths are
+Host and remote are required. Build, environment and lsp are optional.
+lsp defaults to "clangd"; false skips compiler/database discovery and keeps
+local language servers available. Choose an appropriate build_command. Paths are
 absolute remote paths. Neovim asks to trust the file before using it, including
 when contents change. Denied/invalid files stop connection setup.
 
@@ -126,7 +137,8 @@ saved/Lua root wins. Lua fields override JSON; JSON replaces saved settings.
 No arbitrary repository connects. Failed/cancelled attempts require :RemoteStart
 to retry. An active project is never automatically replaced by another one.
 
-The environment command supplies the remote venv for discovery/clangd/builds.
+The environment command applies to discovery, clangd, builds, checks, Git
+synchronization and recovery helpers.
 Local Git hooks are NOT forwarded. Use :RemoteCheck for remote staged checks.
 
 :RemoteCheck                                     *:RemoteCheck*
@@ -141,8 +153,8 @@ Local Git hooks are NOT forwarded. Use :RemoteCheck for remote staged checks.
     Python 3.9+. Submodules/external symlinks are not supported; hooks needing
     working-checkout build artifacts may fail. See README for full limitations.
 
-AUTO COMMIT                                      *farwork-auto-commit*
-setup({ auto_commit = true }) opts into verified remote metadata fast-forward.
+GIT FAST-FORWARD                                 *farwork-git-fast-forward*
+setup({ git = { auto_fast_forward = true } }) opts into verified remote metadata fast-forward.
 Save and finish uploads before committing locally. The next upload can advance
 remote HEAD/index if branches match, history is a fast-forward, the remote index
 is unstaged, and remote tracked files exactly match the local commit. The old

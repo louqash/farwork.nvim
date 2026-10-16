@@ -80,11 +80,11 @@ def advance(root, expected, desired, pack):
         if temp_index and Path(temp_index).exists(): Path(temp_index).unlink()
 
 
-def ssh(host, source, mode, root, *args, input=None):
+def ssh(host, source, mode, root, *args, input=None, environment=""):
+    from transport import run_ssh
     command = 'python3 -c ' + shlex.quote(source) + ' ' + mode + ' ' + shlex.quote(root)
     for arg in args: command += ' ' + shlex.quote(json.dumps(arg))
-    return subprocess.run(['ssh', '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=60', host, command],
-                          input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    return run_ssh(host, command, environment=environment, input=input)
 
 
 def main():
@@ -100,13 +100,14 @@ def main():
         print(json.dumps(desired))
         return
     host, remote = sys.argv[3:5]
+    environment = sys.argv[5] if len(sys.argv) > 5 else ""
     source = Path(__file__).read_text()
-    current = json.loads(ssh(host, source, 'identity', remote).stdout)
+    current = json.loads(ssh(host, source, 'identity', remote, environment=environment).stdout)
     changed = False
     if current != desired:
         if mode != 'check-commit':
             raise RuntimeError("Local and remote Git history differ. Uploads paused; "
-                               "enable auto_commit for verified fast-forward commits. No working files were changed.")
+                               "enable git.auto_fast_forward for verified fast-forward commits. No working files were changed.")
         if not current['branch'] or current['branch'] != desired['branch']:
             raise RuntimeError("Branch mismatch; automatic commit alignment refused")
         if git(root, 'merge-base', '--is-ancestor', current['head'], desired['head'], check=False).returncode:
@@ -114,7 +115,7 @@ def main():
         pack = git(root, 'pack-objects', '--revs', '--stdout',
                    input=(desired['head'] + '\n^' + current['head'] + '\n').encode()).stdout
         if identity(root) != desired: raise RuntimeError('Local history changed; retry')
-        ssh(host, source, 'advance', remote, current, desired, input=pack)
+        ssh(host, source, 'advance', remote, current, desired, input=pack, environment=environment)
         changed = True
     if identity(root) != desired:
         raise RuntimeError("Local Git history changed during the check; retry.")

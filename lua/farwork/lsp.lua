@@ -7,7 +7,7 @@ function M.switch_source_header(bufnr)
   for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
     if client.initialized and not client:is_stopped() then
       if client.name == "remote_clangd" then selected = client; break end
-      if client.name == "clangd" and not require("farwork").owns_buffer(bufnr) then selected = client end
+      if client.name == "clangd" and not require("farwork.remote").owns_lsp_buffer(bufnr) then selected = client end
     end
   end
   if not selected then

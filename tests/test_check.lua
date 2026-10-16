@@ -10,6 +10,7 @@ local buf = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(buf, tmp .. "/code.cpp")
 vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "unsaved edit" })
 local applied, callback, output_buf = false, nil, nil
+local killed = false
 vim.system = function(cmd, opts, done)
   if cmd[3] == "apply" then
     applied = true
@@ -22,7 +23,7 @@ vim.system = function(cmd, opts, done)
   vim.fn.writefile({ vim.json.encode({ code = 1, output = "formatted\nsecond line\n", changes = {{ path = "code.cpp" }} }) }, directory .. "/result.json")
   callback = done
   opts.stderr(nil, "hook running…\n")
-  return {}
+  return { kill = function() killed = true end }
 end
 checker.start(tmp, { host = "test", environment = "" }, false)
 assert(vim.wait(1000, function()
@@ -41,6 +42,15 @@ assert(vim.wait(1000, function()
   return table.concat(vim.api.nvim_buf_get_lines(output_buf, 0, -1, false), "\n"):find("Details on another line", 1, true)
 end), "Multiline apply failures must render without crashing")
 assert(applied)
+applied = false
+checker.start(tmp, { host = "test", environment = "" }, false)
+vim.cmd.RemoteCheckStop()
+assert(killed)
+callback({ code = 0 })
+assert(vim.wait(1000, function()
+  return table.concat(vim.api.nvim_buf_get_lines(output_buf, 0, -1, false), "\n"):find("Check cancelled", 1, true)
+end))
+assert(not applied, "Cancelled check must not apply even a successful late result")
 vim.fn.delete(tmp, "rf")
 print("PASS: immediate split, live progress, unsaved buffers, multiline error regression")
 vim.cmd("qa!")

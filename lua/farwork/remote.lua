@@ -5,22 +5,14 @@ local plugin_config = require("farwork.config")
 local active, connecting
 local retiring_clients = {}
 local q = vim.fn.shellescape
-local types = { c = true, cpp = true, objc = true, objcpp = true }
+local types = require("farwork.clangd").filetypes
 local function tell(message, level)
   vim.notify("Remote: " .. message, level or vim.log.levels.INFO)
 end
 local function inside(path, root)
   return path == root or path:sub(1, #root + 1) == root .. "/"
 end
-local function ssh(config, script)
-  local body = "set -e; "
-  if config.environment and config.environment ~= "" then
-    body = body .. config.environment .. "\n"
-  end
-  body = body .. script
-  return { "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-    config.host, "bash -lc " .. q(body) }
-end
+local ssh = require("farwork.transport").ssh
 local function config_file()
   return plugin_config.state_dir() .. "/remote-projects.json"
 end
@@ -44,15 +36,16 @@ local probe = [=[
 import json, os, shutil, subprocess, sys
 root = os.path.realpath(sys.argv[1])
 if not os.path.isdir(root): raise SystemExit("Remote project directory does not exist")
-clangd = shutil.which("clangd")
-if not clangd: raise SystemExit("clangd is missing from the remote environment PATH")
+use_clangd = sys.argv[3] != "none"
+clangd = shutil.which("clangd") if use_clangd else None
+if use_clangd and not clangd: raise SystemExit("clangd is missing from the remote environment PATH")
 builds = set()
-for directory, dirs, files in os.walk(root):
+for directory, dirs, files in (os.walk(root) if use_clangd else []):
     dirs[:] = [d for d in dirs if d not in ('.git', '.venv', 'venv', 'node_modules')]
     if os.path.relpath(directory, root).count(os.sep) >= 6: dirs[:] = []
     if 'compile_commands.json' in files:
         builds.add(os.path.dirname(os.path.realpath(os.path.join(directory, 'compile_commands.json'))))
-if len(sys.argv) > 2 and sys.argv[2] and os.path.isfile(os.path.join(sys.argv[2], 'compile_commands.json')):
+if use_clangd and len(sys.argv) > 2 and sys.argv[2] and os.path.isfile(os.path.join(sys.argv[2], 'compile_commands.json')):
     builds.add(sys.argv[2])
 roots = sorted('/' + name for name in os.listdir('/') if os.path.isdir('/' + name))
 git_root = None
@@ -68,22 +61,34 @@ function M.owns_buffer(buf)
   return inside(name, active.root) or inside(name, active.cache)
 end
 
+function M.owns_lsp_buffer(buf)
+  return active ~= nil and active.lsp ~= nil and M.owns_buffer(buf)
+end
+
 function M.is_project()
   return active ~= nil and inside(vim.fn.getcwd(), active.root)
 end
 
 local reminded = {}
 function M.local_clangd_root(buf, on_dir)
-  if M.owns_buffer(buf) then return end
+  if active and active.lsp and M.owns_buffer(buf) then return end
   local path = vim.api.nvim_buf_get_name(buf)
   local ok, settings = pcall(read_settings)
   if not ok then
     tell("Cannot read remote project settings; refusing local clangd fallback", vim.log.levels.ERROR)
     return
   end
-  if require("farwork.projects").file_root(path) then return end
-  for root in pairs(vim.tbl_extend("force", settings, plugin_config.options.projects)) do
-    if inside(path, root) then
+  local file_root = require("farwork.projects").file_root(path)
+  if file_root then
+    -- Inspect only the declarative LSP switch here; connecting still requires trust.
+    local trusted, project = pcall(function()
+      local value = vim.json.decode(table.concat(vim.fn.readfile(file_root .. "/.farwork.json"), "\n"))
+      return vim.tbl_extend("force", value, plugin_config.options.projects[file_root] or {})
+    end)
+    if not trusted or project.lsp ~= false then return end
+  end
+  for root, project in pairs(vim.tbl_extend("force", settings, plugin_config.options.projects)) do
+    if root ~= file_root and project.lsp ~= false and inside(path, root) then
       if not reminded[root] then
         reminded[root] = true
         tell("This project uses remote clangd. Run :RemoteStart to connect.")
@@ -96,7 +101,7 @@ function M.local_clangd_root(buf, on_dir)
 end
 
 local function attach(buf)
-  if not active or not active.ready or not vim.api.nvim_buf_is_loaded(buf)
+  if not active or not active.lsp or not active.ready or not vim.api.nvim_buf_is_loaded(buf)
     or not types[vim.bo[buf].filetype] or not M.owns_buffer(buf) then return end
   for _, client in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "clangd" })) do
     vim.lsp.buf_detach_client(buf, client.id)
@@ -136,28 +141,8 @@ end
 local function activate(root, config)
   local upload = require("farwork.upload")
   local cache = plugin_config.cache_dir() .. "/remote-headers/" .. vim.fn.sha256(root .. config.host):sub(1, 16)
-  assert(not (root .. config.remote .. cache):find("[,=]"), "clangd path mappings cannot contain commas or equals signs")
   local s = { root = root, config = config, cache = cache }
-  local base = vim.deepcopy(vim.lsp.config.clangd or {})
-  base.name, base.root_dir = "remote_clangd", root
-  base.flags = vim.tbl_extend("force", base.flags or {}, { allow_incremental_sync = false })
-  base.root_markers, base.before_init = nil, nil
-  base.workspace_folders = { { uri = vim.uri_from_fname(root), name = vim.fs.basename(root) } }
-  -- clangd matches path-component boundaries, so a mapping from "/" alone
-  -- does not match descendants. Map each remote top-level directory instead.
-  local mappings = { root .. "=" .. config.remote }
-  for _, directory in ipairs(config.roots) do
-    assert(not directory:find("[,=]"), "Unsupported remote directory in path mappings")
-    table.insert(mappings, cache .. directory .. "=" .. directory)
-  end
-  local arguments = { config.clangd }
-  vim.list_extend(arguments, plugin_config.options.clangd_args)
-  vim.list_extend(arguments, {
-    "--compile-commands-dir=" .. config.build,
-    "--path-mappings=" .. table.concat(mappings, ",") })
-  for i, value in ipairs(arguments) do arguments[i] = q(value) end
-  base.cmd = ssh(config, "cd -- " .. q(config.remote) .. "; exec " .. table.concat(arguments, " "))
-  s.lsp = base
+  s.lsp = config.lsp ~= false and require("farwork.clangd").config(root, config, cache) or nil
   -- Reserve the upload session before replacing an existing remote LSP session.
   upload.start({ root = root, destination = config.host .. ":" .. config.remote .. "/",
     before_transfer = require("farwork.git").prepare(root, config),
@@ -215,7 +200,7 @@ local function activate(root, config)
     group = group,
     callback = function(event)
       local client = vim.lsp.get_client_by_id(event.data.client_id)
-      if client and client.name == "clangd" and M.owns_buffer(event.buf) then
+      if s.lsp and client and client.name == "clangd" and M.owns_buffer(event.buf) then
         vim.schedule(function()
           if vim.api.nvim_buf_is_valid(event.buf) then vim.lsp.buf_detach_client(event.buf, client.id) end
         end)
@@ -257,7 +242,7 @@ local function ensure_local_git(root, config, callback)
   tell("Initializing local Git history; existing source files will be preserved…")
   vim.system({ "git", "clone", "--no-checkout", "--no-local", "--origin", "workspace",
     "--", config.host .. ":" .. config.remote, staging },
-    { text = true, env = { GIT_TERMINAL_PROMPT = "0", GIT_SSH_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=10" } },
+    { text = true, timeout = plugin_config.options.operation_timeout * 1000, env = { GIT_TERMINAL_PROMPT = "0", GIT_SSH_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=10" } },
     vim.schedule_wrap(function(result)
       if result.code ~= 0 then
         vim.fn.delete(staging, "rf")
@@ -271,6 +256,12 @@ local function ensure_local_git(root, config, callback)
         if vim.uv.fs_lstat(root .. "/.git") then
           vim.fn.delete(staging, "rf")
           callback("Local .git appeared during setup; restart to preserve it"); return
+        end
+        local marked, result = pcall(vim.fn.writefile,
+          { vim.json.encode({ host = config.host, remote = config.remote }) }, staging .. "/.git/farwork-bootstrap.json")
+        if not marked or result ~= 0 then
+          vim.fn.delete(staging, "rf")
+          callback("Cannot record initial download state"); return
         end
         local moved, err = vim.uv.fs_rename(staging .. "/.git", root .. "/.git")
         vim.fn.delete(staging, "rf")
@@ -296,7 +287,7 @@ local function populate(root, config, callback)
   end
   vim.list_extend(cmd, { "--", config.host .. ":" .. config.remote .. "/", root .. "/" })
   tell("Downloading missing project files before starting uploads…")
-  vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
+  vim.system(cmd, { text = true, timeout = plugin_config.options.operation_timeout * 1000 }, vim.schedule_wrap(function(result)
     if result.code ~= 0 then callback(result.stderr or "Initial download failed")
     else callback() end
   end))
@@ -375,17 +366,43 @@ function M.start(options)
     local host, remote = destination:match("^([%w_.%-]+):(/.+)$")
     if not host then connecting = false; tell("Use build-host:/absolute/project/path", vim.log.levels.ERROR); return end
     connecting = true
-    local config = { host = host, remote = remote:gsub("/+$", ""), environment = environment }
-    tell("Discovering remote clangd and compilation databases…")
-    vim.system(ssh(config, "python3 -c " .. q(probe) .. " " .. q(config.remote) .. " " .. q(saved.build or "")),
+    local config = { host = host, remote = remote:gsub("/+$", ""), environment = environment, lsp = saved.lsp }
+    tell(config.lsp == false and "Connecting to remote workspace…" or "Discovering remote clangd and compilation databases…")
+    vim.system(ssh(config, "python3 -c " .. q(probe) .. " " .. q(config.remote) .. " " .. q(saved.build or "") .. " " .. q(config.lsp == false and "none" or "clangd")),
       { text = true, timeout = 30000 }, vim.schedule_wrap(function(result)
         if result.code ~= 0 then connecting = false; tell(result.stderr or "Discovery failed", vim.log.levels.ERROR); return end
         local parsed, data = pcall(vim.json.decode, result.stdout or "")
-        if not parsed or type(data) ~= "table" or not data.remote or not data.clangd or not data.builds or not data.roots then
+        if not parsed or type(data) ~= "table" or not data.remote or (config.lsp ~= false and not data.clangd) or not data.builds or not data.roots then
           connecting = false; tell("Invalid discovery output; shell startup must not print to stdout", vim.log.levels.ERROR); return
         end
         config.remote, config.clangd, config.roots = data.remote, data.clangd, data.roots
         config.git_root = type(data.git_root) == "string" and data.git_root or nil
+        local function connect()
+          local had_git = vim.uv.fs_lstat(root .. "/.git") ~= nil
+          local marker = root .. "/.git/farwork-bootstrap.json"
+          local pending = vim.fn.filereadable(marker) == 1
+          if pending then
+            local valid, previous = pcall(vim.json.decode, table.concat(vim.fn.readfile(marker), "\n"))
+            if not valid or type(previous) ~= "table" or previous.host ~= config.host or previous.remote ~= config.remote then
+              connecting = false
+              tell("Incomplete setup belongs to a different remote. Finish that setup first.", vim.log.levels.ERROR)
+              return
+            end
+          end
+          ensure_local_git(root, config, function(git_error)
+            if git_error then connecting = false; tell(git_error, vim.log.levels.ERROR); return end
+            local function prepared(download_error)
+              connecting = false
+              if download_error then tell(download_error, vim.log.levels.ERROR); return end
+              if vim.fn.filereadable(marker) == 1 then vim.fn.delete(marker) end
+              local success, err = pcall(activate, root, config)
+              if not success then tell(tostring(err), vim.log.levels.ERROR) end
+            end
+            -- Existing checkouts own their deletions. Downloading missing
+            -- files from an old remote HEAD would undo a local rebase.
+            if had_git and not pending then prepared() else populate(root, config, prepared) end
+          end)
+        end
         local function choose(build)
           if not build or build == "" then connecting = false; return end
           if build:sub(1, 1) ~= "/" then connecting = false; tell("Use an absolute remote build directory", vim.log.levels.ERROR); return end
@@ -398,20 +415,13 @@ function M.start(options)
                 tell("Cannot read " .. build .. "/compile_commands.json; configure CMake with CMAKE_EXPORT_COMPILE_COMMANDS=ON", vim.log.levels.ERROR)
                 return
               end
-              local had_git = vim.uv.fs_lstat(root .. "/.git") ~= nil
-              ensure_local_git(root, config, function(git_error)
-                if git_error then connecting = false; tell(git_error, vim.log.levels.ERROR); return end
-                local function prepared(download_error)
-                  connecting = false
-                  if download_error then tell(download_error, vim.log.levels.ERROR); return end
-                  local success, err = pcall(activate, root, config)
-                  if not success then tell(tostring(err), vim.log.levels.ERROR) end
-                end
-                -- Existing checkouts own their deletions. Downloading missing
-                -- files from an old remote HEAD would undo a local rebase.
-                if had_git then prepared() else populate(root, config, prepared) end
-              end)
+              connect()
             end))
+        end
+        if config.lsp == false then
+          config.build = saved.build or config.remote
+          connect()
+          return
         end
         if not reset and saved.build and vim.tbl_contains(data.builds, saved.build) then choose(saved.build)
         elseif #data.builds == 1 then choose(data.builds[1])
@@ -443,6 +453,7 @@ function M.setup(opts)
   require("farwork.sync").setup()
   vim.api.nvim_create_user_command("RemoteRefresh", function()
     if not active or not active.ready then tell("Run :RemoteStart first"); return end
+    if not active.lsp then tell("No remote language server configured"); return end
     if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :UploadStatus"); return end
     local client = active.client and vim.lsp.get_client_by_id(active.client)
     if client then

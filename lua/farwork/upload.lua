@@ -89,6 +89,8 @@ pump = function()
   s.busy = true
   local function finished(result)
     vim.schedule(function()
+      if s.cancelled then return end
+      s.process = nil
       s.busy = false
       if result.code ~= 0 then
         if not s.pending[relative] then
@@ -107,6 +109,7 @@ pump = function()
     end)
   end
   local function begin_transfer()
+    if s.cancelled then return end
     local command = {
       s.rsync, "--relative", "--protect-args", "--times", "--perms",
       -- Each requested save must transfer, even if size and timestamp match.
@@ -115,6 +118,7 @@ pump = function()
       "ssh -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=10 -o ServerAliveCountMax=3",
     }
     local function transfer(files)
+      if s.cancelled then return end
       local options = { cwd = s.root, text = true }
       if initial then
         table.insert(command, "--from0")
@@ -123,7 +127,8 @@ pump = function()
       end
       vim.list_extend(command, { "--", initial and "./" or ("./" .. relative), s.destination })
       local ok, err = pcall(vim.system, command, options, finished)
-      if not ok then finished({ code = 1, stderr = tostring(err) }) end
+      if not ok then finished({ code = 1, stderr = tostring(err) })
+      else s.process = err end
     end
     if initial then
       project_files(s, function(err, files)
@@ -134,10 +139,12 @@ pump = function()
     end
   end
   if s.opts.before_transfer then
-    s.opts.before_transfer(function(err)
+    local ok, process = pcall(s.opts.before_transfer, function(err)
       if err then finished({ code = 1, stderr = err }); return end
       begin_transfer()
     end)
+    if not ok then finished({ code = 1, stderr = tostring(process) })
+    elseif process then s.process = process end
   else
     begin_transfer()
   end
@@ -188,16 +195,16 @@ function M.start(opts)
     if session then session.failed = nil; pump() end
   end, { force = true })
   vim.api.nvim_create_user_command("UploadStop", function()
-    if session and session.busy then
-      notify("Wait for the current transfer to finish before stopping", vim.log.levels.WARN)
-      return
-    end
     if session and session.paused then
       notify("Finish or cancel the recovery dialog first", vim.log.levels.WARN); return
     end
     local stopped = session
     session = nil
-    if stopped then release_waiters(stopped, false) end
+    if stopped then
+      stopped.cancelled = true
+      if stopped.process and stopped.process.kill then stopped.process:kill(15) end
+      release_waiters(stopped, false)
+    end
     vim.api.nvim_clear_autocmds({ group = group })
     notify("disabled; queued uploads discarded")
   end, { force = true })

@@ -1,6 +1,7 @@
 .PHONY: test
 
 test:
+	PYTHONDONTWRITEBYTECODE=1 python3 tests/test_transport.py
 	PYTHONDONTWRITEBYTECODE=1 python3 tests/test_remote_git.py
 	PYTHONDONTWRITEBYTECODE=1 python3 tests/test_remote_check.py
 	PYTHONDONTWRITEBYTECODE=1 python3 tests/test_remote_recovery.py

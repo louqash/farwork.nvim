@@ -25,7 +25,7 @@ local local_client, remote_client = client("clangd", 1), client("remote_clangd",
 local clients = { local_client, remote_client }
 vim.lsp.get_clients = function() return clients end
 vim.lsp.get_client_by_id = function(id) return id == 1 and local_client or remote_client end
-plugin.owns_buffer = function() return true end
+require("farwork.remote").owns_lsp_buffer = function() return true end
 plugin.switch_source_header(source)
 assert(calls[1].client == "remote_clangd", "Prefer remote clangd over a stray local client")
 calls[1].callback(nil, vim.uri_from_fname(target))
@@ -33,7 +33,7 @@ assert(vim.api.nvim_buf_get_name(0) == target, "Open the returned URI, including
 clients = { local_client }
 plugin.switch_source_header(source)
 assert(#calls == 1 and #notices == 1, "Never fall back to local clangd in an active remote buffer")
-plugin.owns_buffer = function() return false end
+require("farwork.remote").owns_lsp_buffer = function() return false end
 plugin.switch_source_header(source)
 assert(calls[2].client == "clangd", "Support ordinary local projects")
 calls[2].callback({ message = "server error" })

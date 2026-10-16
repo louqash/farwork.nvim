@@ -25,7 +25,7 @@ function M.start(root, config)
   end
   local function finish(resume) busy = false; release(resume) end
   local function run(mode, callback)
-    local ok, err = pcall(vim.system, { "python3", script, mode, root, config.host, config.remote, plan_file },
+    local ok, err = pcall(require("farwork.process").run, { "python3", script, mode, root, config.host, config.remote, plan_file, config.environment or "" },
       { text = true }, vim.schedule_wrap(function(result)
         if result.code ~= 0 then
           render({ "Recovery stopped; uploads remain paused.", result.stderr or "Unknown error",

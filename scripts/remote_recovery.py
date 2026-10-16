@@ -163,10 +163,10 @@ def repair(root, wanted, approved, pack):
         if temp_index and Path(temp_index).exists(): Path(temp_index).unlink()
 
 
-def remote_call(host, mode, root, payload):
+def remote_call(host, mode, root, payload, environment=""):
+    from transport import run_ssh
     command = 'python3 -c ' + shlex.quote(Path(__file__).read_text()) + ' ' + mode + ' ' + shlex.quote(root)
-    result = subprocess.run(['ssh', '-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=30',
-                             host, command], input=json.dumps(payload).encode(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = run_ssh(host, command, environment=environment, input=json.dumps(payload).encode())
     if result.returncode:
         raise RuntimeError(result.stderr.decode(errors='replace') + '\nIf SSH failed, check the host/workspace connection first; recovery made no further attempts.')
     return json.loads(result.stdout)
@@ -180,9 +180,10 @@ def main():
         data = json.load(sys.stdin)
         print(json.dumps(repair(root, data['request'], data['report'], base64.b64decode(data['pack'])))); return
     host, remote, plan_file = sys.argv[3:6]
+    environment = sys.argv[6] if len(sys.argv) > 6 else ""
     if mode == 'diagnose':
         wanted = request(root)
-        report = remote_call(host, 'remote-preview', remote, wanted)
+        report = remote_call(host, 'remote-preview', remote, wanted, environment)
         if git(root, 'cat-file', '-e', report['current']['head'], check=False).returncode:
             report['allowed'] = False
             report['reasons'].append('Remote commits are missing locally. Fetch and inspect the remote branch first: git fetch '
@@ -199,7 +200,7 @@ def main():
         if git(root, 'cat-file', '-e', old, check=False).returncode:
             raise RuntimeError('Remote history is missing locally. Fetch and review the remote commits before recovery.')
         pack = git(root, 'pack-objects', '--revs', '--stdout', data=(new + '\n^' + old + '\n').encode()).stdout
-        result = remote_call(host, 'remote-repair', remote, {**plan, 'pack': base64.b64encode(pack).decode()})
+        result = remote_call(host, 'remote-repair', remote, {**plan, 'pack': base64.b64encode(pack).decode()}, environment)
         if request(root) != plan['request']:
             raise RuntimeError('Local project changed during repair. Remote recovery completed, but uploads remain paused; run :RemoteDoctor again.')
         print(json.dumps(result))

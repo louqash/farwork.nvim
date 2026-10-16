@@ -36,8 +36,9 @@ Neovim + local files  ── save ────►  Project files + dependencies
 | Linux or macOS | CMake and your project's dependencies |
 | | pre-commit, if you use remote checks |
 
-The plugin does not install these tools or configure your build. It supports
-C/C++ through clangd. Coder is optional; any working SSH alias can be used.
+The plugin does not install these tools or configure your build. Remote language
+features support C/C++ through clangd. Other projects can use sync, builds, and
+checks with `"lsp": false`; they do not need clangd or a compilation database. Coder is optional; any working SSH alias can be used.
 
 Set up an alias in `~/.ssh/config`, then test it from your local terminal:
 
@@ -64,7 +65,7 @@ Add this entry to your **lazy.nvim** plugin list:
   lazy = false,
   opts = {
     auto_connect = true,
-    auto_commit = true,
+    git = { auto_fast_forward = true },
   },
   config = function(_, opts)
     require("farwork").setup(opts)
@@ -75,7 +76,7 @@ Add this entry to your **lazy.nvim** plugin list:
 This example enables two optional features:
 
 - `auto_connect`: connect when you open a known remote project.
-- `auto_commit`: advance remote Git metadata after a local commit, but only
+- `git.auto_fast_forward`: advance remote Git metadata after a local commit, but only
   when the history is a fast-forward and the remote files already match.
   It does **not** create commits for you.
 
@@ -98,7 +99,7 @@ Add the plugin directory to `runtimepath`, then call `setup()`:
 vim.opt.runtimepath:prepend("/absolute/path/to/farwork.nvim")
 require("farwork").setup({
   auto_connect = true,
-  auto_commit = true,
+  git = { auto_fast_forward = true },
 })
 ```
 
@@ -123,7 +124,8 @@ Use the repository root on both machines. In the **local** project root, create
 | `host` | Required. An SSH alias from your SSH config. |
 | `remote` | Required. The absolute path to the remote repository. |
 | `build` | Optional. The remote directory containing `compile_commands.json`. Otherwise, the plugin searches for it. |
-| `environment` | Optional. A Bash command run remotely before discovery, clangd, builds, and checks. Omit it if no setup is needed. |
+| `environment` | Optional. A Bash command run remotely before discovery, clangd, builds, checks, Git synchronization, and recovery. Omit it if no setup is needed. |
+| `lsp` | Optional. `"clangd"` (default) or `false` for sync/build/check workflows without remote language features. |
 
 All paths in this file refer to the **remote machine**. A remote venv stays
 remote; the plugin does not copy it to your computer.
@@ -131,6 +133,28 @@ remote; the plugin does not copy it to your computer.
 If these settings are personal, add `.farwork.json` to
 `.git/info/exclude`. You can also share the file with your team and use the same
 SSH alias with different connection details on each computer.
+
+For a project without clangd, omit `build` and set `lsp` to false:
+
+```json
+{ "host": "build-host", "remote": "/home/dev/my-app", "lsp": false }
+```
+
+Choose its build/check commands in your Neovim configuration, for example:
+
+```lua
+require("farwork").setup({
+  build_command = function() return { "make" } end,
+  check_command = { "python3", "-m", "pytest" },
+  check_args = "none",
+})
+```
+
+Builds run in the remote checkout. Checks run in a temporary copy of the local
+index, not the remote checkout; untracked dependencies and build artifacts are
+not included. `check_args = "none"` passes the command unchanged. Stage files
+first or use `:RemoteCheck!`. With `lsp = false`, local language servers remain
+available; Farwork does not provide remote servers for other languages yet.
 
 ### 4. Open Neovim and connect
 
@@ -245,7 +269,7 @@ connection. Close Neovim to end the session.
 6. Wait for uploads to succeed, then commit and push locally.
 
 A push updates your Git server. It does not update the remote working checkout.
-With `auto_commit = true`, the next upload can advance the remote branch and
+With `git = { auto_fast_forward = true }`, the next upload can advance the remote branch and
 index when its tracked files already match your new commit. Other mismatches
 pause uploads and point you to `:RemoteDoctor`.
 
@@ -339,7 +363,7 @@ The installation example is enough for most users. These are the full defaults:
 ```lua
 require("farwork").setup({
   auto_connect = false,
-  auto_commit = false,
+  git = { auto_fast_forward = false },
   keymaps = false,
   notify_uploads = false,
   projects = {},
@@ -349,6 +373,9 @@ require("farwork").setup({
     return { "cmake", "--build", project.build }
   end,
   check_command = { "pre-commit", "run", "--hook-stage", "pre-commit" },
+  check_args = "pre-commit", -- or "none" for an ordinary command
+  operation_timeout = 120, -- seconds, Git helpers and setup transfers
+  check_timeout = 600, -- seconds
   upload_exclude = function(relative_path) return false end,
   state_dir = nil, -- Neovim's standard state directory
   cache_dir = nil, -- Neovim's standard cache directory
@@ -359,8 +386,14 @@ require("farwork").setup({
   and the compilation database; do not add conflicting flags.
 - `build_command` returns an argument list. It runs from the remote project
   directory; shell quoting is handled for you.
-- `check_command` is an argument list. The plugin appends `--files ...` or
-  `--all-files`.
+- `check_command` is an argument list. With `check_args = "pre-commit"`, the
+  plugin appends `--files ...` or `--all-files`. Use `"none"` to pass it unchanged.
+- `operation_timeout` bounds Git/recovery helper execution and setup transfers.
+  `check_timeout` bounds remote checks. A timed-out operation reports failure;
+  a timed-out repair may be partial, so inspect it with `:RemoteDoctor`.
+- `:UploadStop` cancels the active transfer or Git guard and discards the queue.
+  A transfer may already have written files; reconnect and sync to reconcile.
+- `:RemoteCheckStop` cancels a check without applying returned fixes.
 - `upload_exclude` adds exclusions. It cannot remove the built-in protections
   and does not control the initial download.
 - `notify_uploads` enables success messages for individual uploads. Errors are
@@ -478,6 +511,13 @@ You can keep editing saved local files offline. Remote LSP features and builds
 need a connection. Local Git diff and status work offline. Upload queues live
 in memory: closing Neovim does not preserve the queue. Reconnect and run a full
 sync to send saved files that have not reached the remote.
+
+Interrupted first-time downloads are resumed on the next `:RemoteStart`;
+existing local files are preserved. Normal reconnects do not restore deliberate
+local deletions.
+
+Checks currently package the entire Git index in memory. Repositories containing
+submodules or external symlinks are not supported by this check workflow.
 
 The plugin supports one active remote project per Neovim instance. LSP requests,
 remote headers, builds, and checks still have network latency. It does not copy

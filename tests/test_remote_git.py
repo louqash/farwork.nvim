@@ -1,8 +1,9 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 """Real Git fixtures; no network or user repositories."""
 import importlib.util
-from pathlib import Path
 import subprocess
-import sys
 import os
 import json
 import tempfile
@@ -34,15 +35,20 @@ class GitSyncTest(unittest.TestCase):
         sync.git(self.local, "add", "-A")
         sync.git(self.local, "-c", "commit.gpgsign=false", "commit", "-m", message)
 
-    def check_upload(self, mode="check"):
+    def check_upload(self, mode="check", environment=""):
         shim = self.base / "bin"
         shim.mkdir(exist_ok=True)
         ssh = shim / "ssh"
         ssh.write_text('#!/bin/bash\nexec bash -c "${!#}"\n')
         ssh.chmod(0o700)
         return subprocess.run([sys.executable, sync.__file__, mode, str(self.local),
-                               "fixture-only", str(self.remote)], capture_output=True, text=True,
+                               "fixture-only", str(self.remote), environment], capture_output=True, text=True,
                               env={**os.environ, "PATH": str(shim) + os.pathsep + os.environ["PATH"]})
+
+    def test_environment_reaches_git_guard(self):
+        result = self.check_upload(environment="echo environment-guard >&2; exit 23")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("environment-guard", result.stderr)
 
     def assert_preserved(self):
         self.assertEqual((self.remote / ".venv/bin/activate").read_text(), "remote venv")

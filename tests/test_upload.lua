@@ -164,6 +164,26 @@ for _, options in ipairs({ {}, { exclude = function() return false end } }) do
   assert(#calls == count, "Saving virtual environment files must not upload them")
   vim.cmd.UploadStop()
 end
+local guard, killed
+upload.start({ root = root, destination = "coder.test:/tmp/project/", initial_sync = false,
+  before_transfer = function(done)
+    guard = done
+    return { kill = function(_, signal) killed = signal end }
+  end })
+local count = #calls
+save("src/a.txt")
+assert(upload.status().busy)
+vim.cmd.UploadStop()
+assert(killed == 15 and not upload.status().enabled, "Stop must cancel a stalled guard")
+guard(nil)
+vim.wait(30, function() return false end, 5)
+assert(#calls == count, "A late guard callback must not upload after stop")
+upload.start({ root = root, destination = "coder.test:/tmp/project/", initial_sync = false })
+save("src/a.txt")
+wait_for(count + 1)
+vim.cmd.UploadStop()
+complete(count + 1, 0)
+assert(not upload.status().enabled, "Late transfer completion must not revive stopped session")
 vim.fn.stdpath = stdpath
 vim.cmd.cd("/")
 vim.fn.delete(root, "rf")

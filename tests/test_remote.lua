@@ -30,6 +30,7 @@ vim.fn.writefile({ vim.json.encode({ {
   directory = remote, file = remote .. "/main.cpp",
   arguments = { "clang++", "-std=c++17", "-c", remote .. "/main.cpp" },
 } }) }, remote .. "/build/compile_commands.json")
+local fail_download = true
 local real_system, real_start, real_stdpath = vim.system, vim.lsp.start, vim.fn.stdpath
 local real_buf_attach = vim.api.nvim_buf_attach
 local drop_native_changes = false
@@ -60,6 +61,11 @@ vim.fn.stdpath = function(kind)
 end
 vim.system = function(cmd, opts, callback)
   cmd = vim.deepcopy(cmd)
+  if fail_download and cmd[1]:match("rsync$") and vim.tbl_contains(cmd, "--ignore-existing") then
+    fail_download = false
+    vim.schedule(function() callback({ code = 1, stderr = "Injected download interruption" }) end)
+    return {}
+  end
   if cmd[1] == "python3" and cmd[2]:match("remote_git%.py$") then
     opts = vim.tbl_extend("force", opts or {}, { env = { PATH = temp .. "/bin:" .. vim.env.PATH } })
   end
@@ -98,12 +104,17 @@ require("farwork.config").setup({
 })
 mod.setup()
 vim.cmd.RemoteStart()
+assert(vim.wait(10000, function() return not mod.status().connecting end, 20))
+assert(vim.fn.filereadable(root .. "/.git/farwork-bootstrap.json") == 1)
+assert(vim.fn.filereadable(root .. "/" .. recipe) == 0)
+mod.start({ destination = "coder.test:" .. remote })
 local client
 assert(vim.wait(20000, function()
   client = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
   return client and client.initialized
 end, 30), table.concat(notices, "\n"))
 assert(prompts == 2)
+assert(vim.fn.filereadable(root .. "/.git/farwork-bootstrap.json") == 0)
 assert(vim.fn.filereadable(remote .. "/main.cpp") == 1)
 assert(vim.fn.filereadable(remote .. "/local-only") == 0, "Custom upload exclusion must be applied")
 assert(not starts[1].cmd[#starts[1].cmd]:find("--clang-tidy", 1, true), "Custom clangd flags must replace defaults")
@@ -281,6 +292,25 @@ assert(vim.wait(10000, function()
   for _, notice in ipairs(notices) do if notice:find("Remote: Ready:", 1, true) then count = count + 1 end end
   return count == 4 and require("farwork.upload").idle(root)
 end, 20), table.concat(notices, "\n"))
+-- Sync/build mode does not require a compilation database or start clangd.
+local start_count = #starts
+vim.fn.delete(remote .. "/build/compile_commands.json")
+local plain = { host = "coder.test", remote = remote, lsp = false, environment = "export FARWORK_TEST=active" }
+vim.fn.writefile({ vim.json.encode(plain) }, project_file)
+mod.start({ root = root })
+assert(vim.wait(10000, function()
+  return mod.status().ready and require("farwork.upload").idle(root) and mod.status().build == remote
+end, 20), table.concat(notices, "\n"))
+assert(#starts == start_count, "Plain project must not start clangd")
+local local_allowed = false
+mod.local_clangd_root(buf, function() local_allowed = true end)
+assert(local_allowed, "Plain projects must not disable local language servers")
+vim.api.nvim_buf_call(buf, function() vim.cmd.write() end)
+assert(vim.wait(10000, function() return require("farwork.upload").idle(root) end, 20))
+recorded = nil
+vim.cmd.RemoteBuild()
+assert(vim.wait(10000, function() return recorded ~= nil end, 20), table.concat(notices, "\n"))
+assert(recorded.cmd[#recorded.cmd]:find("FARWORK_TEST=active", 1, true))
 vim.secure.read = secure_read
 vim.api.nvim_buf_attach = real_buf_attach
 for _, c in ipairs(vim.lsp.get_clients()) do c:stop(true) end
