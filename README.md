@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
-  <img src="assets/logo-light.svg" alt="farwork.nvim" width="300">
-</picture>
+<img src="assets/logo.svg" alt="farwork.nvim" width="300">
 
 Local Neovim editing. Remote tools, builds, and workspaces.
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="340" height="80" viewBox="0 0 340 80" role="img" aria-labelledby="title">
+  <title id="title">farwork.nvim</title>
+  <g fill="none" stroke="#738166" stroke-width="1.8">
+    <path d="M7 60V39a26 26 0 0 1 52 0v21"/>
+    <circle cx="33" cy="39" r="21"/>
+    <path d="M5 62h56M33 18v42" stroke-width="1"/>
+    <circle cx="45" cy="40" r="1.6" fill="#738166" stroke="none"/>
+  </g>
+  <text x="80" y="53" font-family="Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-size="39" letter-spacing="-1" fill="#738166">farwork<tspan font-size="21" letter-spacing="0">.nvim</tspan></text>
+</svg>

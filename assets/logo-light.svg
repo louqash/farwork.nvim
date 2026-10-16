@@ -1,4 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="64" viewBox="0 0 360 64" role="img" aria-label="farwork.nvim">
-  <path d="M8 22l10 10L8 42" fill="none" stroke="#24292f" stroke-width="3" stroke-linecap="square"/>
-  <text x="36" y="43" font-family="ui-monospace, SFMono-Regular, Consolas, monospace" font-size="32" font-weight="600" fill="#24292f">farwork<tspan fill="#57606a" font-weight="400">.nvim</tspan></text>
-</svg>

@@ -194,6 +194,11 @@ assert(vim.wait(10000, function()
   return count == 2 and require("farwork.upload").idle(root)
 end, 20), table.concat(notices, "\n"))
 assert(prompts == 2, "Reconnect must reuse saved project settings")
+-- Ready marks upload completion; the replacement LSP initializes asynchronously.
+assert(vim.wait(10000, function()
+  local clients = vim.lsp.get_clients({ name = "remote_clangd" })
+  return #clients == 1 and clients[1].initialized
+end, 20), "Reconnect must finish replacing the old language server")
 -- A fresh module instance simulates restarting Neovim without RemoteStart.
 package.loaded["farwork.remote"] = nil
 local fresh = require("farwork.remote")
