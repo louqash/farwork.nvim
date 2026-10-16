@@ -205,27 +205,21 @@ projects, and Farwork separately detaches local clangd from active project
 buffers. The guard avoids installing hooks for that unwanted local client;
 normal setup still runs for `remote_clangd` and other language servers.
 
-For C/C++ header/source switching, handle both client names and send clangd's
-request to the attached client directly. Add this later in the same callback:
+With `keymaps = true`, Farwork installs `<leader>ch` for C/C++ header/source
+switching when either local or remote clangd attaches. No clangd-specific
+mapping is needed in your `LspAttach` callback.
+
+For a custom mapping with the default `keymaps = false`:
 
 ```lua
-if client.name == "clangd" or client.name == "remote_clangd" then
-  vim.keymap.set("n", "<leader>ch", function()
-    client:request("textDocument/switchSourceHeader",
-      vim.lsp.util.make_text_document_params(), function(err, uri)
-        if err then
-          vim.notify(err.message, vim.log.levels.ERROR)
-        elseif uri and uri ~= "" then
-          vim.cmd.edit(vim.fn.fnameescape(vim.uri_to_fname(uri)))
-        end
-      end, bufnr)
-  end, { buffer = bufnr, desc = "Switch C/C++ header/source" })
-end
+vim.keymap.set("n", "<leader>ch", function()
+  require("farwork").switch_source_header()
+end, { desc = "Switch C/C++ header/source" })
 ```
 
-This avoids depending on `:LspClangdSwitchSourceHeader` being available or
-selecting the renamed remote client. Farwork configures clangd's path mappings
-and loads remote-only headers through its cache.
+Farwork selects the attached remote clangd first, sends the request directly,
+and opens the returned URI. It also works with local clangd outside active
+remote projects. Remote-only headers are loaded through Farwork's cache.
 
 </details>
 

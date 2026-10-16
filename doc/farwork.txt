@@ -98,11 +98,11 @@ This skips your callback's keymaps/hooks for local clangd; it does not stop
 or detach a client. Farwork separately detaches local clangd from its buffers.
 The remote client is named "remote_clangd", so its normal attach setup runs.
 
-For clangd-specific keymaps, match both "clangd" and "remote_clangd".
-For header/source switching, send textDocument/switchSourceHeader through
-client:request() to the attached client. Do not rely on a command that assumes
-the client is named "clangd". See the README's local-clangd integration section
-for a complete buffer-local mapping.
+With keymaps=true, Farwork installs buffer-local <leader>ch for local and
+remote clangd. No source/header request code is needed in your configuration.
+For a custom mapping, call require('farwork').switch_source_header(bufnr).
+The optional bufnr defaults to the current buffer. Remote clangd is preferred;
+local clangd is used only outside an active remote project.
 
 
 PROJECT FILES AND AUTO-CONNECT                     *farwork-project-file*

@@ -8,6 +8,7 @@ function M.setup(opts)
   require("farwork.upload").setup(opts)
   require("farwork.remote").setup(opts)
   require("farwork.projects").setup(opts)
+  require("farwork.lsp").setup(opts)
 end
 
 function M.start(options)
@@ -27,6 +28,10 @@ end
 
 function M.local_clangd_root(buf, on_dir)
   return require("farwork.remote").local_clangd_root(buf, on_dir)
+end
+
+function M.switch_source_header(bufnr)
+  return require("farwork.lsp").switch_source_header(bufnr)
 end
 
 return M
