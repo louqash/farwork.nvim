@@ -35,7 +35,7 @@ environment activation is saved per project through :RemoteStart!.
 COMMANDS                                          *farwork-commands*
 :RemoteStart [dest]   Connect from a project/subdirectory; optional host:/path.
 :RemoteStart!         Prompt for destination, environment and build directory.
-:RemoteProjects       Pick a saved/configured project; keeps the current cwd.
+:RemoteProjects       Connect to a saved/configured project, then :cd its root.
 :RemoteSync           Retry uploads and sync saved files without restarting LSP.
 :RemoteStatus         Show project and language-server status.
 :RemoteRefresh        Restart remote clangd once uploads are idle.
@@ -48,6 +48,13 @@ COMMANDS                                          *farwork-commands*
 :UploadRetry         Retry a failed queue without discarding saved files.
 :UploadStop          Cancel the active transfer/guard and discard its queue.
 :RemoteCheckStop     Cancel a running check without applying returned fixes.
+
+:RemoteProjects works from any directory. It switches to the selected local
+root only after setup and the initial upload succeed. Cancellation or failure
+keeps the current directory; a successful upload retry completes the switch.
+Existing buffers stay open. Nothing is cloned into the directory you started
+from. :RemoteStart and auto-connect do not change directories. The directory
+change uses :cd (global, not :lcd or :tcd).
 
 BEHAVIOR                                          *farwork-behavior*
 Local files overwrite corresponding remote files. Git metadata, virtual

@@ -188,6 +188,13 @@ Run `:RemoteStart` from the local repository root. Enter
 `build-host:/absolute/remote/project`, an optional environment command, and the
 build directory if asked. These settings are saved locally for later sessions.
 Use `:RemoteStart!` to change them, or `:RemoteProjects` to choose a saved project.
+You can open the picker from any directory, including an empty one. After the
+selected project's connection setup and initial upload succeed, Neovim changes
+its working directory to that project's existing local root (`:cd`), so file
+pickers and directory-based commands follow it. It does not clone into the
+current directory or close your open buffers. Cancelling the picker or a failed
+connection leaves your working directory unchanged; a successful upload retry
+completes the switch. `:RemoteStart` and auto-connect do not change directories.
 
 If the local directory has no `.git`, the plugin can copy the remote Git history
 and download missing source files. Existing local files are preserved. Existing
@@ -239,7 +246,7 @@ remote projects. Remote-only headers are loaded through Farwork's cache.
 | --- | --- |
 | Connect or reconnect | `:RemoteStart` |
 | Change connection settings | `:RemoteStart!` |
-| Choose a saved or configured project | `:RemoteProjects` |
+| Connect to a saved project and switch to its local root | `:RemoteProjects` |
 | See connection, LSP, and upload status | `:RemoteStatus` |
 | Upload saved files and retry the queue | `:RemoteSync` |
 | Wait for uploads | `:UploadWait` |

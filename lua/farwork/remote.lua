@@ -144,7 +144,7 @@ local function fetch(buf, remote, required)
   return true
 end
 
-local function activate(root, config)
+local function activate(root, config, change_directory)
   local upload = require("farwork.upload")
   local cache = plugin_config.cache_dir() .. "/remote-headers/" .. vim.fn.sha256(root .. config.host):sub(1, 16)
   local s = { root = root, config = config, cache = cache }
@@ -172,6 +172,10 @@ local function activate(root, config)
         return
       end
       s.ready = true
+      if change_directory then
+        local changed, err = pcall(vim.cmd.cd, vim.fn.fnameescape(root))
+        if not changed then tell("Connected, but could not change directory: " .. tostring(err), vim.log.levels.ERROR) end
+      end
       for _, buf in ipairs(vim.api.nvim_list_bufs()) do attach(buf) end
       tell("Ready: " .. config.host .. " · " .. config.build)
     end,
@@ -401,7 +405,7 @@ function M.start(options)
               connecting = false
               if download_error then tell(download_error, vim.log.levels.ERROR); return end
               if vim.fn.filereadable(marker) == 1 then vim.fn.delete(marker) end
-              local success, err = pcall(activate, root, config)
+              local success, err = pcall(activate, root, config, options.change_directory)
               if not success then tell(tostring(err), vim.log.levels.ERROR) end
             end
             -- Existing checkouts own their deletions. Downloading missing
@@ -498,8 +502,8 @@ function M.setup(opts)
     if #roots == 0 then tell("No saved projects. Run :RemoteStart from a local project first."); return end
     vim.ui.select(roots, { prompt = "Connect to project:", format_item = function(root)
       return root .. " → " .. profiles[root].host .. ":" .. profiles[root].remote
-    end }, function(root) if root then M.start({ root = root }) end end)
-  end, { force = true, desc = "Choose a saved or configured remote project" })
+    end }, function(root) if root then M.start({ root = root, change_directory = true }) end end)
+  end, { force = true, desc = "Connect to a saved project and switch to its local root" })
   vim.api.nvim_create_user_command("RemoteSync", function()
     if not active then tell("Run :RemoteStart first"); return end
     require("farwork.upload").sync(active.root, function(completed)

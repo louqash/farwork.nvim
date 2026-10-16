@@ -10,5 +10,6 @@ test:
 	nvim --headless -n -u NONE -i NONE -l tests/test_check.lua
 	nvim --headless -n -u NONE -i NONE -l tests/test_recovery.lua
 	nvim --headless -n -u NONE -i NONE -l tests/test_projects.lua
+	nvim --headless -n -u NONE -i NONE -l tests/test_remote_projects.lua
 	nvim --headless -n -u NONE -i NONE -l tests/test_upload.lua
 	nvim --headless -n -u NONE -i NONE -l tests/test_remote.lua
