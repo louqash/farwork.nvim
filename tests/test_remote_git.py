@@ -82,6 +82,75 @@ class GitSyncTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             sync.identity(self.local)
 
+    def test_verified_commit_advances_metadata_preserves_venv(self):
+        self.create_remote_work()
+        (self.local / "source").write_text("remote edits")
+        self.commit("uploaded changes")
+        previous = sync.identity(self.remote)
+        result = self.check_upload("check-commit")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout)["changed"])
+        self.assertEqual(sync.identity(self.local), sync.identity(self.remote))
+        self.assert_preserved()
+        self.assertEqual(sync.git(self.remote, "diff", "--cached", "--name-only").stdout, b"")
+        backups = sync.git(self.remote, "for-each-ref", "--format=%(objectname)", "refs/nvim/backups/").stdout.decode()
+        self.assertIn(previous["head"], backups)
+        self.assertFalse((self.remote / ".git/index.lock").exists())
+
+    def test_commit_refuses_different_remote_content(self):
+        self.create_remote_work()
+        previous = sync.identity(self.remote)
+        (self.local / "source").write_text("different edit")
+        self.commit("different")
+        result = self.check_upload("check-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("do not exactly match", result.stderr)
+        self.assertEqual(sync.identity(self.remote), previous)
+        self.assert_preserved()
+        self.assertFalse((self.remote / ".git/index.lock").exists())
+
+    def test_commit_refuses_remote_staging(self):
+        self.create_remote_work()
+        sync.git(self.remote, "add", "source")
+        previous = sync.identity(self.remote)
+        index = sync.git(self.remote, "write-tree").stdout
+        (self.local / "source").write_text("remote edits")
+        self.commit("same staged content")
+        result = self.check_upload("check-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("staged changes", result.stderr)
+        self.assertEqual(sync.identity(self.remote), previous)
+        self.assertEqual(sync.git(self.remote, "write-tree").stdout, index)
+        self.assert_preserved()
+
+    def test_commit_refuses_rewritten_history(self):
+        self.create_remote_work()
+        previous = sync.identity(self.remote)
+        (self.local / "source").write_text("remote edits")
+        sync.git(self.local, "add", "source")
+        sync.git(self.local, "-c", "commit.gpgsign=false", "commit", "--amend", "-m", "rewrite")
+        self.assertNotEqual(self.check_upload("check-commit").returncode, 0)
+        self.assertEqual(sync.identity(self.remote), previous)
+        self.assert_preserved()
+
+    def test_commit_refuses_remote_lock(self):
+        (self.local / "source").write_text("uploaded")
+        (self.remote / "source").write_text("uploaded")
+        self.commit("uploaded")
+        lock = self.remote / ".git/index.lock"
+        lock.write_text("another Git process")
+        result = self.check_upload("check-commit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(lock.read_text(), "another Git process")
+
+    def test_commit_refuses_deleted_paths(self):
+        previous = sync.identity(self.remote)
+        (self.local / "source").unlink()
+        self.commit("delete source")
+        self.assertNotEqual(self.check_upload("check-commit").returncode, 0)
+        self.assertEqual(sync.identity(self.remote), previous)
+        self.assertEqual((self.remote / "source").read_text(), "baseline")
+
     def test_old_receive_mode_cannot_mutate(self):
         self.create_remote_work()
         result = subprocess.run([sys.executable, sync.__file__, "receive", str(self.remote), "{}"],

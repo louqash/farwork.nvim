@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Neovim ${{ matrix.neovim }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+        neovim: [v0.11.0, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clangd rsync python3
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install rsync
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+      - name: Run tests
+        run: make test

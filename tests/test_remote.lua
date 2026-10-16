@@ -10,6 +10,8 @@ local root, remote, dependency = temp .. "/local", temp .. "/remote", temp .. "/
 vim.fn.mkdir(temp .. "/bin", "p")
 vim.fn.writefile({ "#!/bin/bash", 'exec bash -c "${!#}"' }, temp .. "/bin/ssh")
 vim.fn.setfperm(temp .. "/bin/ssh", "rwx------")
+vim.fn.writefile({ "#!/bin/sh", 'printf "%s\\n" "$@"' }, temp .. "/bin/record-build")
+vim.fn.setfperm(temp .. "/bin/record-build", "rwx------")
 vim.fn.mkdir(remote .. "/build", "p")
 vim.fn.mkdir(dependency, "p")
 vim.fn.writefile({ "inline int answer() { return 42; }" }, dependency .. "/answer.h")
@@ -87,12 +89,12 @@ vim.ui.input = function(_, callback)
   prompts = prompts + 1
   callback(prompts == 1 and ("coder.test:" .. remote) or "")
 end
-local mod = require("remote_workspace.remote")
-require("remote_workspace.config").setup({
+local mod = require("farwork.remote")
+require("farwork.config").setup({
   rsync = vim.fn.exepath("rsync"),
   clangd_args = { "--background-index" },
   upload_exclude = function(path) return path == "local-only" end,
-  build_command = function(project) return { "cmake", "--build", project.build, "--target", "example" } end,
+  build_command = function(project) return { temp .. "/bin/record-build", "--build", project.build, "--target", "example" } end,
 })
 mod.setup()
 vim.cmd.RemoteStart()
@@ -111,8 +113,8 @@ assert(vim.fn.filereadable(root .. "/build/compile_commands.json") == 0)
 assert(vim.fn.readfile(root .. "/main.cpp")[1]:find("#include", 1, true), "Download must preserve local edits")
 assert(mod.is_project())
 assert(vim.fn.readfile(root .. "/" .. recipe)[1] == "kind: cmake", "Nested build source must download")
-assert(not require("remote_workspace.upload").default_exclude(recipe))
-assert(require("remote_workspace.upload").default_exclude("build/generated.o"))
+assert(not require("farwork.upload").default_exclude(recipe))
+assert(require("farwork.upload").default_exclude("build/generated.o"))
 local recipe_status = real_system({ "git", "-C", root, "status", "--porcelain", "--", recipe }, { text = true }):wait()
 assert(recipe_status.code == 0 and recipe_status.stdout == "", "Downloaded tracked recipe must not appear deleted")
 assert(vim.fn.isdirectory(root .. "/.git") == 1, "Must create a real local checkout")
@@ -144,7 +146,7 @@ client.notify = function(self, method, params)
   return notify_rpc(self, method, params)
 end
 vim.cmd.write()
-assert(vim.wait(5000, function() return require("remote_workspace.upload").idle(root) end, 20))
+assert(vim.wait(5000, function() return require("farwork.upload").idle(root) end, 20))
 assert(vim.fn.readfile(remote .. "/main.cpp")[2]:find("+ 1", 1, true))
 assert(uploaded_notification, "Clangd must be notified after completed uploads")
 local old_id = client.id
@@ -169,24 +171,32 @@ assert(table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n"):find("+in
 vim.cmd.close()
 local recorded
 vim.fn.jobstart = function(cmd, opts) recorded = { cmd = cmd, opts = opts }; return 1 end
-vim.cmd.RemoteBuild()
+vim.cmd("RemoteBuild -j 2")
 assert(vim.wait(10000, function() return recorded ~= nil end, 20), table.concat(notices, "\n"))
 assert(recorded and recorded.opts.term and recorded.cmd[#recorded.cmd]:find("--build", 1, true))
 assert(recorded.cmd[#recorded.cmd]:find("example", 1, true), "Custom build target must reach the remote command")
+local build_result = real_system({ "bash", "-c", recorded.cmd[#recorded.cmd] }, { text = true }):wait()
+assert(build_result.code == 0 and build_result.stdout == "--build\n" .. remote .. "/build\n--target\nexample\n-j\n2\n",
+  "Command arguments must survive remote shell quoting: " .. vim.inspect(build_result))
+local snapshot = mod.status()
+assert(snapshot.ready and snapshot.lsp_connected and snapshot.upload.queued == 0)
+assert(snapshot.root == root and snapshot.host == "coder.test")
 assert(real_system({ "git", "-C", root, "add", "main.cpp" }, { text = true }):wait().code == 0)
 local local_index = real_system({ "git", "-C", root, "write-tree" }, { text = true }):wait().stdout
+vim.cmd.cd(vim.fn.fnameescape(root .. "/src"))
+assert(mod.project_root() == root, "Nested directories must resolve the saved project")
 vim.cmd.RemoteStart()
 assert(vim.wait(10000, function()
   local count = 0
   for _, notice in ipairs(notices) do
     if notice:find("Remote: Ready:", 1, true) then count = count + 1 end
   end
-  return count == 2 and require("remote_workspace.upload").idle(root)
+  return count == 2 and require("farwork.upload").idle(root)
 end, 20), table.concat(notices, "\n"))
 assert(prompts == 2, "Reconnect must reuse saved project settings")
 -- A fresh module instance simulates restarting Neovim without RemoteStart.
-package.loaded["remote_workspace.remote"] = nil
-local fresh = require("remote_workspace.remote")
+package.loaded["farwork.remote"] = nil
+local fresh = require("farwork.remote")
 local local_started = false
 fresh.local_clangd_root(buf, function() local_started = true end)
 assert(not local_started, "Remembered remote project must not fall back to Mac clangd")
@@ -194,7 +204,7 @@ local outside = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_name(outside, temp .. "/ordinary/local.cpp")
 fresh.local_clangd_root(outside, function() local_started = true end)
 assert(local_started, "Unrelated local projects must still use local clangd")
-package.loaded["remote_workspace.remote"] = mod
+package.loaded["farwork.remote"] = mod
 assert(real_system({ "git", "-C", root, "rev-parse", "HEAD" }, { text = true }):wait().stdout == local_head,
   "Reconnect must preserve existing local Git metadata")
 assert(real_system({ "git", "-C", root, "write-tree" }, { text = true }):wait().stdout == local_index,
@@ -227,6 +237,40 @@ vim.api.nvim_exec_autocmds("TextChangedI", { buffer = buf })
 assert(vim.wait(10000, function() return not has_missing_name() end, 20), "Fixed diagnostics must clear without refresh")
 assert(client.id == recovery_id and not client:is_stopped(), "Recovery must not restart clangd")
 assert(vim.lsp.util.buf_versions[buf] == vim.api.nvim_buf_get_changedtick(buf))
+-- A configured profile must also connect with no saved state or prompts.
+vim.fn.delete(temp .. "/state/remote-projects.json")
+require("farwork.config").options.projects[root] = {
+  host = "coder.test", remote = remote, build = remote .. "/build", environment = "",
+}
+vim.ui.input = function() error("Configured profiles must not prompt") end
+mod.start({ root = root })
+assert(vim.wait(10000, function()
+  local count = 0
+  for _, notice in ipairs(notices) do if notice:find("Remote: Ready:", 1, true) then count = count + 1 end end
+  return count == 3 and require("farwork.upload").idle(root)
+end, 20), table.concat(notices, "\n"))
+assert(vim.wait(5000, function() return mod.status().lsp_connected end, 20))
+local sync_client = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
+vim.cmd.RemoteSync()
+assert(vim.wait(10000, function() return require("farwork.upload").idle(root) end, 20))
+assert(not sync_client:is_stopped(), "Manual file sync must not restart the LSP")
+-- A trusted project file connects with no saved or Lua profile and no prompts.
+vim.fn.delete(temp .. "/state/remote-projects.json")
+local project_file = root .. "/.remote-workspace.json"
+vim.fn.writefile({ vim.json.encode(require("farwork.config").options.projects[root]) }, project_file)
+require("farwork.config").options.projects = {}
+local secure_read = vim.secure.read
+vim.secure.read = function(path)
+  assert(path == project_file)
+  return table.concat(vim.fn.readfile(path), "\n")
+end
+mod.start({ root = root .. "/src" })
+assert(vim.wait(10000, function()
+  local count = 0
+  for _, notice in ipairs(notices) do if notice:find("Remote: Ready:", 1, true) then count = count + 1 end end
+  return count == 4 and require("farwork.upload").idle(root)
+end, 20), table.concat(notices, "\n"))
+vim.secure.read = secure_read
 vim.api.nvim_buf_attach = real_buf_attach
 for _, c in ipairs(vim.lsp.get_clients()) do c:stop(true) end
 vim.system, vim.lsp.start, vim.fn.stdpath = real_system, real_start, real_stdpath

@@ -1,22 +1,45 @@
 vim.opt.rtp:prepend(vim.fn.getcwd())
-local plugin = require("remote_workspace")
+local plugin = require("farwork")
+assert(require("remote_workspace") == plugin, "Legacy API must share the same module")
+assert(require("remote_workspace.config") == require("farwork.config"))
 plugin.setup()
 plugin.setup()
-for _, name in ipairs({ "RemoteStart", "RemoteStatus", "RemoteRefresh", "RemoteBuild", "RemoteDiff", "UploadStart" }) do
+for _, name in ipairs({ "RemoteCheck", "RemoteStart", "RemoteStatus", "RemoteRefresh", "RemoteBuild", "RemoteDiff", "RemoteSync", "RemoteProjects", "UploadStart" }) do
   assert(vim.fn.exists(":" .. name) == 2, "Missing command " .. name)
 end
 assert(not plugin.is_project())
+assert(not plugin.status().upload.enabled and not plugin.status().connecting)
 assert(vim.fn.maparg("<leader>rs", "n") == "", "Keymaps must be opt-in")
 plugin.setup({ keymaps = true })
 assert(vim.fn.maparg("<leader>rs", "n") ~= "")
 assert(vim.fn.maparg("<leader>us", "n") ~= "")
 assert(package.loaded["louqash.remote"] == nil, "Plugin must not depend on personal dotfiles")
-local config = require("remote_workspace.config")
-plugin.setup({ state_dir = "/tmp/remote-workspace-state", cache_dir = "/tmp/remote-workspace-cache", clangd_args = {} })
-assert(config.state_dir() == "/tmp/remote-workspace-state")
-assert(config.cache_dir() == "/tmp/remote-workspace-cache")
+local config = require("farwork.config")
+plugin.setup({ state_dir = "/tmp/farwork-state", cache_dir = "/tmp/farwork-cache", clangd_args = {} })
+assert(config.state_dir() == "/tmp/farwork-state")
+assert(config.cache_dir() == "/tmp/farwork-cache")
 assert(#config.options.clangd_args == 0, "Empty argument lists must replace defaults")
 assert(not pcall(plugin.setup, { unexpected = true }), "Unknown options should be rejected")
 assert(not pcall(plugin.setup, { build_command = "cmake" }), "Build command must be a function")
+assert(not pcall(plugin.setup, { projects = { ["/tmp/example"] = { host = "bad host", remote = "/repo" } } }))
+local tmp = vim.fn.tempname()
+vim.fn.mkdir(tmp .. "/src", "p")
+tmp = vim.uv.fs_realpath(tmp)
+plugin.setup({ state_dir = tmp .. "/state", projects = {
+  [tmp] = { host = "build-host", remote = "/workspace", build = "/workspace/build" },
+} })
+assert(plugin.project_root(tmp .. "/src") == tmp)
+local selected
+vim.ui.select = function(items, opts, callback)
+  assert(items[1] == tmp and opts.format_item(tmp):find("build-host", 1, true))
+  selected = true
+  callback(nil)
+end
+vim.cmd.RemoteProjects()
+assert(selected and not plugin.status().connecting, "Cancelling the project picker must not connect")
+vim.ui.input = function(_, callback) callback(nil) end
+plugin.start({ root = tmp, reset = true })
+assert(not plugin.status().connecting, "Cancelling connection setup must release the connection lock")
+vim.fn.delete(tmp, "rf")
 print("PASS: standalone setup, repeated setup, commands, optional keymaps")
 vim.cmd("qa!")

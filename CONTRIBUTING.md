@@ -4,10 +4,10 @@ Install Neovim 0.11+, Python 3, Git, Bash, clangd, and rsync 3+ on PATH, then ru
 `make test` from the repository root. Tests use disposable local repositories
 and a local substitute for SSH; they do not connect to a user's workspace.
 
-The modules under `lua/remote_workspace/` own configuration, SSH project setup,
-upload queuing, LSP edit recovery, and Git checks. `scripts/remote_git.py` is a
-read-only guard. Add public options in `config.lua` and document them in both
-README.md and `doc/remote-workspace.txt`.
+The modules under `lua/farwork/` own configuration, SSH project setup,
+upload queuing, LSP edit recovery, and Git checks. `scripts/remote_git.py` checks repository alignment and implements the
+opt-in, verified metadata fast-forward. Add public options in `config.lua` and document them in both
+README.md and `doc/farwork.txt`.
 
 Preserve these boundaries:
 
