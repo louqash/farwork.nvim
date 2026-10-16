@@ -43,7 +43,7 @@ local function register_status()
 end
 
 local function excluded(opts, path, directory)
-  if path == ".git" or path:match("^%.git/") then return true end
+  if M.default_exclude(path) then return true end
   return opts.exclude and (opts.exclude(path) or (directory and opts.exclude(path .. "/")))
 end
 

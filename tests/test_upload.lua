@@ -8,6 +8,12 @@ vim.fn.mkdir(root .. "/.git", "p")
 for _, name in ipairs({ "src/a.txt", "src/b.txt", "src/with space.txt", ".env", "build/output", ".git/config" }) do
   vim.fn.writefile({ name }, root .. "/" .. name)
 end
+local protected = { ".venv/lib/python3.12/site-packages/pip/_internal/operations/build/metadata.py",
+  "nested/venv/bin/pip", "nested/.venv/pyvenv.cfg" }
+for _, name in ipairs(protected) do
+  vim.fn.mkdir(vim.fn.fnamemodify(root .. "/" .. name, ":h"), "p")
+  vim.fn.writefile({ "environment must stay local" }, root .. "/" .. name)
+end
 vim.uv.fs_symlink(root .. "/src/a.txt", root .. "/link.txt")
 local calls, notices = {}, {}
 vim.notify = function(message) table.insert(notices, message) end
@@ -37,7 +43,7 @@ wait_for(1)
 local manifest = calls[1].opts.stdin
 assert(manifest:find("src/a.txt\0", 1, true))
 assert(manifest:find("src/with space.txt\0", 1, true))
-for _, excluded in ipairs({ ".env", "build/", ".git/", "link.txt" }) do
+for _, excluded in ipairs({ ".env", "build/", ".git/", "link.txt", ".venv/", "venv/" }) do
   assert(not manifest:find(excluded, 1, true), excluded .. " should be excluded")
 end
 assert(not vim.tbl_contains(calls[1].cmd, "--delete"))
@@ -68,7 +74,9 @@ vim.cmd.UploadStatus()
 assert(notices[#notices]:find("idle; 0 upload", 1, true))
 vim.cmd.UploadStop()
 upload.start({ root = root, destination = "coder.test:/tmp/project/", initial_sync = false })
-assert(#calls == 5, "Save-only mode must not upload initially")
+for _, name in ipairs(protected) do save(name) end
+vim.wait(30, function() return false end, 5)
+assert(#calls == 5, "Save-only mode must never upload virtual environment files")
 vim.cmd.UploadStop()
 
 -- Isolate persisted configuration while testing the interactive commands.
@@ -140,6 +148,22 @@ wait_for(12)
 complete(12, 0)
 assert(upload.idle(root))
 vim.cmd.UploadStop()
+-- Built-in exclusions apply even to direct callers with no filter or a
+-- permissive custom filter, for both initial sync and subsequent saves.
+for _, options in ipairs({ {}, { exclude = function() return false end } }) do
+  local count = #calls + 1
+  options.root, options.destination = root, "coder.test:/tmp/project/"
+  upload.start(options)
+  wait_for(count)
+  for _, name in ipairs(protected) do
+    assert(not calls[count].opts.stdin:find(name, 1, true), "Manifest leaked " .. name)
+  end
+  complete(count, 0)
+  for _, name in ipairs(protected) do save(name) end
+  vim.wait(30, function() return false end, 5)
+  assert(#calls == count, "Saving virtual environment files must not upload them")
+  vim.cmd.UploadStop()
+end
 vim.fn.stdpath = stdpath
 vim.cmd.cd("/")
 vim.fn.delete(root, "rf")
