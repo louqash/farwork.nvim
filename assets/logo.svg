@@ -5,7 +5,7 @@
     <clipPath id="door"><circle cx="83" cy="88" r="35"/></clipPath>
     <path id="leaf" d="M0 0C-7-1-10-6-9-12C-3-11 1-6 0 0Z"/>
   </defs>
-  <g fill="none" stroke="#788563" stroke-linecap="round" stroke-linejoin="round">
+  <g fill="none" stroke="#294b3b" stroke-linecap="round" stroke-linejoin="round">
     <!-- Hills and the small stone threshold. -->
     <path d="M13 116C23 97 31 87 40 83M126 83C139 86 148 99 155 111" stroke-width="1.3"/>
     <path d="M18 123C37 119 45 122 53 125M114 125C128 121 144 121 157 124" stroke-width="1.2"/>
@@ -23,11 +23,11 @@
       <path d="M65 66V83M65 94V110M93 61V77M93 97V115" opacity=".5"/>
     </g>
     <path d="M51 75H65L69 78L65 81H50M50 99H64L68 102L64 105H53" stroke-width="1.2"/>
-    <circle cx="84" cy="89" r="4.2" stroke-width="1.5"/>
-    <circle cx="84" cy="86.5" r="1.2" fill="#788563" stroke="none"/>
+    <circle cx="84" cy="89" r="4.2" stroke="#a17c35" stroke-width="1.5"/>
+    <circle cx="84" cy="86.5" r="1.2" fill="#a17c35" stroke="none"/>
     <!-- Ivy: asymmetry keeps the mark organic rather than heraldic. -->
     <path d="M30 119C28 101 31 82 39 66C45 53 56 39 70 33M135 118C140 102 137 85 128 71C119 57 109 42 96 35" stroke-width="1.35"/>
-    <g fill="#788563" stroke="none">
+    <g fill="#294b3b" stroke="none">
       <use href="#leaf" transform="translate(31 105) rotate(-28)"/>
       <use href="#leaf" transform="translate(32 95) rotate(87) scale(.8)"/>
       <use href="#leaf" transform="translate(36 79) rotate(-12)"/>
@@ -41,12 +41,12 @@
       <use href="#leaf" transform="translate(103 42) rotate(112) scale(.7)"/>
     </g>
     <path d="M24 122L22 115M27 121L29 114M144 121L147 115M148 122L152 119" stroke-width="1.1"/>
-    <path d="M83 15L85 23L92 25L85 27L83 35L81 27L74 25L81 23Z" stroke-width="1"/>
-    <circle cx="66" cy="21" r="1" fill="#788563" stroke="none"/>
-    <circle cx="100" cy="21" r="1" fill="#788563" stroke="none"/>
+    <path d="M83 15L85 23L92 25L85 27L83 35L81 27L74 25L81 23Z" stroke="#a17c35" stroke-width="1"/>
+    <circle cx="66" cy="21" r="1" fill="#294b3b" stroke="none"/>
+    <circle cx="100" cy="21" r="1" fill="#294b3b" stroke="none"/>
     <!-- Restrained flourishes beneath the wordmark. -->
     <path d="M191 127H291M419 127H465M301 127C314 118 324 136 337 127C350 118 360 136 373 127C386 118 396 136 409 127" stroke-width=".9"/>
     <path d="M188 127L193 124M188 127L193 130M468 127L463 124M468 127L463 130" stroke-width=".9"/>
   </g>
-  <text x="181" y="108" font-family="Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-size="61" letter-spacing="-1.5" fill="#788563">farwork<tspan font-size="28" letter-spacing="0">.nvim</tspan></text>
+  <text x="181" y="108" font-family="Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-size="61" letter-spacing="-1.5" fill="#294b3b">farwork<tspan font-size="28" letter-spacing="0">.nvim</tspan></text>
 </svg>

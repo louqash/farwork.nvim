@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="farwork.nvim" width="480">
+  <a href="assets/logo.svg#gh-light-mode-only"><img src="assets/logo.svg#gh-light-mode-only" alt="farwork.nvim" width="480"></a>
+  <a href="assets/logo-dark.svg#gh-dark-mode-only"><img src="assets/logo-dark.svg#gh-dark-mode-only" alt="farwork.nvim" width="480"></a>
 </p>
 
 Local Neovim editing. Remote tools, builds, and workspaces.
