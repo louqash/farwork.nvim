@@ -185,25 +185,8 @@ Its client name is **`remote_clangd`**; the local server is named **`clangd`**.
 Keep your usual LSP keymaps and completion setup. Farwork does not install
 bindings such as `gd` or hover.
 
-In your existing `LspAttach` callback, skip local-clangd setup for buffers owned
-by the active Farwork project. Put this guard before installing keymaps or
-client-specific hooks:
-
-```lua
-local client = vim.lsp.get_client_by_id(args.data.client_id)
-if not client then return end
-local bufnr = args.buf
-if client.name == "clangd" and require("farwork").owns_buffer(bufnr) then
-  return
-end
-```
-
-`owns_buffer()` includes local project files and cached remote headers. The
-`return` only skips this callback; it does not stop or detach a server. The
-`root_dir` callback above prevents local clangd from starting in known remote
-projects, and Farwork separately detaches local clangd from active project
-buffers. The guard avoids installing hooks for that unwanted local client;
-normal setup still runs for `remote_clangd` and other language servers.
+Farwork detaches local clangd from buffers in its active remote project.
+Keep your usual `LspAttach` callback; no Farwork-specific early return is needed.
 
 With `keymaps = true`, Farwork installs `<leader>ch` for C/C++ header/source
 switching when either local or remote clangd attaches. No clangd-specific

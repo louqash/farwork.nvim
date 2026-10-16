@@ -89,14 +89,9 @@ LSP INTEGRATION                                    *farwork-lsp*
 Use require('farwork').local_clangd_root as vim.lsp.config.clangd.root_dir
 so local clangd does not start in known remote projects.
 
-In your LspAttach callback, after resolving client and bufnr: >lua
-    if client.name == "clangd" and require("farwork").owns_buffer(bufnr) then
-      return
-    end
-<
-This skips your callback's keymaps/hooks for local clangd; it does not stop
-or detach a client. Farwork separately detaches local clangd from its buffers.
-The remote client is named "remote_clangd", so its normal attach setup runs.
+Farwork detaches local clangd from active project buffers. Keep your usual
+LspAttach callback; no Farwork-specific early return is needed. The remote
+client is named "remote_clangd".
 
 With keymaps=true, Farwork installs buffer-local <leader>ch for local and
 remote clangd. No source/header request code is needed in your configuration.
