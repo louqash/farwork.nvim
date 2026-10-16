@@ -30,9 +30,35 @@ jobs:
         run: |
           brew install rsync
           echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
-      - uses: rhysd/action-setup-vim@v1
-        with:
-          neovim: true
-          version: ${{ matrix.neovim }}
+      - name: Install prebuilt Neovim
+        timeout-minutes: 5
+        env:
+          NVIM_VERSION: ${{ matrix.neovim }}
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS) platform=macos ;;
+            Linux) platform=linux ;;
+            *) echo "Unsupported runner: $RUNNER_OS" >&2; exit 1 ;;
+          esac
+          case "$(uname -m)" in
+            arm64|aarch64) arch=arm64 ;;
+            x86_64) arch=x86_64 ;;
+            *) echo "Unsupported architecture" >&2; exit 1 ;;
+          esac
+          if [ "$NVIM_VERSION" = stable ]; then
+            release=latest/download
+          else
+            release="download/$NVIM_VERSION"
+          fi
+          archive="$RUNNER_TEMP/neovim.tar.gz"
+          install_dir="$RUNNER_TEMP/neovim"
+          curl --fail --location --retry 3 --connect-timeout 10 --max-time 120 \
+            "https://github.com/neovim/neovim/releases/$release/nvim-$platform-$arch.tar.gz" \
+            --output "$archive"
+          mkdir -p "$install_dir"
+          tar -xzf "$archive" --strip-components=1 -C "$install_dir"
+          echo "$install_dir/bin" >> "$GITHUB_PATH"
+          "$install_dir/bin/nvim" --version
       - name: Run tests
         run: make test
