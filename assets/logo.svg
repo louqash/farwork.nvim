@@ -1,10 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="340" height="80" viewBox="0 0 340 80" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="180" viewBox="0 0 500 180" role="img" aria-labelledby="title desc">
   <title id="title">farwork.nvim</title>
-  <g fill="none" stroke="#738166" stroke-width="1.8">
-    <path d="M7 60V39a26 26 0 0 1 52 0v21"/>
-    <circle cx="33" cy="39" r="21"/>
-    <path d="M5 62h56M33 18v42" stroke-width="1"/>
-    <circle cx="45" cy="40" r="1.6" fill="#738166" stroke="none"/>
+  <desc id="desc">A round wooden door beneath a leafy arch, a winding path and a small star. A quiet place to work from afar.</desc>
+  <defs>
+    <clipPath id="door"><circle cx="83" cy="88" r="35"/></clipPath>
+    <path id="leaf" d="M0 0C-7-1-10-6-9-12C-3-11 1-6 0 0Z"/>
+  </defs>
+  <g fill="none" stroke="#788563" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Hills and the small stone threshold. -->
+    <path d="M13 116C23 97 31 87 40 83M126 83C139 86 148 99 155 111" stroke-width="1.3"/>
+    <path d="M18 123C37 119 45 122 53 125M114 125C128 121 144 121 157 124" stroke-width="1.2"/>
+    <path d="M49 127H117M54 132H111" stroke-width="1.7"/>
+    <path d="M71 133C78 143 101 143 101 151C101 158 77 159 65 166M94 133C102 139 121 143 119 152C117 163 96 165 88 171" stroke-width="1.15"/>
+    <!-- Masonry around the circular door. -->
+    <path d="M44 119A47 47 0 1 1 122 119" stroke-width="1.8"/>
+    <path d="M50 115A40 40 0 1 1 116 115" stroke-width="1.1"/>
+    <path d="M37 80L43 81M40 66L47 69M48 54L53 59M59 46L63 52M75 42L76 48M91 42L90 48M107 47L103 53M119 57L114 61M127 70L121 73M130 85L123 85M128 101L121 99" stroke-width="1.1"/>
+    <circle cx="83" cy="88" r="35" stroke-width="2"/>
+    <circle cx="83" cy="88" r="31" stroke-width="0.85"/>
+    <!-- Door planks, hinges, and a central brass-like ring. -->
+    <g clip-path="url(#door)" stroke-width="0.85">
+      <path d="M62 51V125M76 51V125M90 51V125M104 51V125"/>
+      <path d="M65 66V83M65 94V110M93 61V77M93 97V115" opacity=".5"/>
+    </g>
+    <path d="M51 75H65L69 78L65 81H50M50 99H64L68 102L64 105H53" stroke-width="1.2"/>
+    <circle cx="84" cy="89" r="4.2" stroke-width="1.5"/>
+    <circle cx="84" cy="86.5" r="1.2" fill="#788563" stroke="none"/>
+    <!-- Ivy: asymmetry keeps the mark organic rather than heraldic. -->
+    <path d="M30 119C28 101 31 82 39 66C45 53 56 39 70 33M135 118C140 102 137 85 128 71C119 57 109 42 96 35" stroke-width="1.35"/>
+    <g fill="#788563" stroke="none">
+      <use href="#leaf" transform="translate(31 105) rotate(-28)"/>
+      <use href="#leaf" transform="translate(32 95) rotate(87) scale(.8)"/>
+      <use href="#leaf" transform="translate(36 79) rotate(-12)"/>
+      <use href="#leaf" transform="translate(45 60) rotate(93) scale(.8)"/>
+      <use href="#leaf" transform="translate(56 44) rotate(20) scale(.8)"/>
+      <use href="#leaf" transform="translate(69 34) rotate(99) scale(.65)"/>
+      <use href="#leaf" transform="translate(137 108) rotate(89)"/>
+      <use href="#leaf" transform="translate(136 94) rotate(-34) scale(.8)"/>
+      <use href="#leaf" transform="translate(127 71) rotate(105) scale(.9)"/>
+      <use href="#leaf" transform="translate(116 55) rotate(-18) scale(.8)"/>
+      <use href="#leaf" transform="translate(103 42) rotate(112) scale(.7)"/>
+    </g>
+    <path d="M24 122L22 115M27 121L29 114M144 121L147 115M148 122L152 119" stroke-width="1.1"/>
+    <path d="M83 15L85 23L92 25L85 27L83 35L81 27L74 25L81 23Z" stroke-width="1"/>
+    <circle cx="66" cy="21" r="1" fill="#788563" stroke="none"/>
+    <circle cx="100" cy="21" r="1" fill="#788563" stroke="none"/>
+    <!-- Restrained flourishes beneath the wordmark. -->
+    <path d="M191 127H291M419 127H465M301 127C314 118 324 136 337 127C350 118 360 136 373 127C386 118 396 136 409 127" stroke-width=".9"/>
+    <path d="M188 127L193 124M188 127L193 130M468 127L463 124M468 127L463 130" stroke-width=".9"/>
   </g>
-  <text x="80" y="53" font-family="Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-size="39" letter-spacing="-1" fill="#738166">farwork<tspan font-size="21" letter-spacing="0">.nvim</tspan></text>
+  <text x="181" y="108" font-family="Palatino, 'Palatino Linotype', 'Book Antiqua', Georgia, serif" font-size="61" letter-spacing="-1.5" fill="#788563">farwork<tspan font-size="28" letter-spacing="0">.nvim</tspan></text>
 </svg>

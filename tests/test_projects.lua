@@ -60,6 +60,31 @@ remote.status = function() return { root = "/another", upload = {} } end
 plugin.setup({ state_dir = tmp .. "/state", auto_connect = true, projects = { [root] = profile } })
 vim.wait(30, function() return false end)
 assert(starts == 2, "Must not automatically switch active projects")
+-- The closest profile controls local LSP ownership, not any ancestor profile.
+plugin.setup({ state_dir = tmp .. "/state", projects = {
+  [root] = profile,
+  [root .. "/src"] = { host = "build-host", remote = "/plain", lsp = false },
+} })
+called = false
+remote.local_clangd_root(buf, function() called = true end)
+assert(called, "A nested plain project must override a parent's remote clangd")
+-- A nested project file likewise overrides saved/configured ancestors.
+write(root .. "/src/.farwork.json", { host = "build-host", remote = "/plain", lsp = false })
+plugin.setup({ state_dir = tmp .. "/state", projects = { [root] = profile } })
+called = false
+remote.local_clangd_root(buf, function() called = true end)
+assert(called, "A nested plain project file must override an ancestor profile")
+-- Lua fields still override the same-root project file.
+plugin.setup({ state_dir = tmp .. "/state", projects = { [root .. "/src"] = profile } })
+called = false
+remote.local_clangd_root(buf, function() called = true end)
+assert(called, "Unspecified Lua lsp must preserve the file's explicit false")
+plugin.setup({ state_dir = tmp .. "/state", projects = {
+  [root .. "/src"] = vim.tbl_extend("force", profile, { lsp = "clangd" }),
+} })
+called = false
+remote.local_clangd_root(buf, function() called = true end)
+assert(not called, "Explicit Lua clangd must override the project file")
 plugin.setup({ state_dir = tmp .. "/state" })
 vim.fn.delete(tmp, "rf")
 print("PASS: project files, Git boundaries, trust denial, validation, opt-in auto-connect")

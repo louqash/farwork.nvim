@@ -78,23 +78,29 @@ function M.local_clangd_root(buf, on_dir)
     tell("Cannot read remote project settings; refusing local clangd fallback", vim.log.levels.ERROR)
     return
   end
-  local file_root = require("farwork.projects").file_root(path)
-  if file_root then
-    -- Inspect only the declarative LSP switch here; connecting still requires trust.
-    local trusted, project = pcall(function()
-      local value = vim.json.decode(table.concat(vim.fn.readfile(file_root .. "/.farwork.json"), "\n"))
-      return vim.tbl_extend("force", value, plugin_config.options.projects[file_root] or {})
-    end)
-    if not trusted or project.lsp ~= false then return end
-  end
-  for root, project in pairs(vim.tbl_extend("force", settings, plugin_config.options.projects)) do
-    if root ~= file_root and project.lsp ~= false and inside(path, root) then
-      if not reminded[root] then
-        reminded[root] = true
-        tell("This project uses remote clangd. Run :RemoteStart to connect.")
-      end
-      return
+  local profiles = vim.tbl_extend("force", settings, plugin_config.options.projects)
+  local selected, project
+  for root, candidate in pairs(profiles) do
+    if inside(path, root) and (not selected or #root > #selected) then
+      selected, project = root, candidate
     end
+  end
+  local file_root = require("farwork.projects").file_root(path)
+  if file_root and (not selected or #file_root >= #selected) then
+    -- Read only declarative fields here; connecting still requires trust.
+    local valid, value = pcall(function()
+      local data = vim.json.decode(table.concat(vim.fn.readfile(file_root .. "/.farwork.json"), "\n"))
+      return vim.tbl_extend("force", data, plugin_config.options.projects[file_root] or {})
+    end)
+    if not valid then return end
+    selected, project = file_root, value
+  end
+  if project and project.lsp ~= false then
+    if not reminded[selected] then
+      reminded[selected] = true
+      tell("This project uses remote clangd. Run :RemoteStart to connect.")
+    end
+    return
   end
   on_dir(vim.fs.root(buf, { ".clangd", ".clang-tidy", ".clang-format", "compile_commands.json",
     "compile_flags.txt", "configure.ac", ".git" }) or vim.fs.dirname(path))

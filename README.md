@@ -1,4 +1,6 @@
-<img src="assets/logo.svg" alt="farwork.nvim" width="300">
+<p align="center">
+  <img src="assets/logo.svg" alt="farwork.nvim" width="480">
+</p>
 
 Local Neovim editing. Remote tools, builds, and workspaces.
 

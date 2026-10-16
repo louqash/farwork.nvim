@@ -24,7 +24,7 @@ recovery.start(tmp,{host='test',remote='/remote',environment='export TEST=active
 assert(vim.wait(1000,function() return #releases==1 end))
 assert(releases[1]==false and applies==0, 'Cancel must not repair or resume')
 vim.ui.select = function(items,_,callback) callback(items[2]) end
-recovery.start(tmp,{host='test',remote='/remote',environment='export TEST=active'})
+recovery.start(tmp,{host='test',remote='/remote',build='/remote',lsp=false,environment='export TEST=active'})
 assert(vim.wait(1000,function() return #releases==2 end))
 assert(releases[2]==true and applies==1, 'Confirmed repair resumes only after success')
 report.allowed=false; report.reasons={'Conflicting remote edit\nKeep this file'}
@@ -42,6 +42,12 @@ end
 recovery.start(tmp,{host='test',remote='/remote',environment='export TEST=active'})
 assert(vim.wait(1000,function() return #releases==4 end))
 assert(releases[4]==false and not held, 'Repair failure must keep queue stopped but release review lock')
+-- A separate build directory remains protected even in plain project mode.
+report.paths={{path='build-output/generated',state='pending_upload'}}
+vim.ui.select = function() error('Build outputs must not be offered for repair') end
+recovery.start(tmp,{host='test',remote='/remote',build='/remote/build-output',lsp=false,environment='export TEST=active'})
+assert(vim.wait(1000,function() return #releases==5 end))
+assert(releases[5]==false and not held)
 vim.fn.delete(tmp,'rf')
 print('PASS: recovery command, cancellation, confirmation, blocking, queue hold')
 vim.cmd('qa!')

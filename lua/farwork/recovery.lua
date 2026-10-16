@@ -44,7 +44,7 @@ function M.start(root, config)
     for _, item in ipairs(report.paths) do
       local path = config.remote .. "/" .. item.path
       if options.options.upload_exclude(item.path)
-        or (config.build and (path == config.build or path:sub(1, #config.build + 1) == config.build .. "/")) then
+        or (config.build and config.build ~= config.remote and (path == config.build or path:sub(1, #config.build + 1) == config.build .. "/")) then
         report.allowed = false
         table.insert(report.reasons, "Excluded/build path requires manual review: " .. item.path)
       end
