@@ -181,8 +181,51 @@ vim.lsp.config("clangd", {
 ```
 
 Remote clangd inherits capabilities and settings from `vim.lsp.config.clangd`.
-Keep your usual LSP keymaps and completion setup. This plugin does not install
+Its client name is **`remote_clangd`**; the local server is named **`clangd`**.
+Keep your usual LSP keymaps and completion setup. Farwork does not install
 bindings such as `gd` or hover.
+
+In your existing `LspAttach` callback, skip local-clangd setup for buffers owned
+by the active Farwork project. Put this guard before installing keymaps or
+client-specific hooks:
+
+```lua
+local client = vim.lsp.get_client_by_id(args.data.client_id)
+if not client then return end
+local bufnr = args.buf
+if client.name == "clangd" and require("farwork").owns_buffer(bufnr) then
+  return
+end
+```
+
+`owns_buffer()` includes local project files and cached remote headers. The
+`return` only skips this callback; it does not stop or detach a server. The
+`root_dir` callback above prevents local clangd from starting in known remote
+projects, and Farwork separately detaches local clangd from active project
+buffers. The guard avoids installing hooks for that unwanted local client;
+normal setup still runs for `remote_clangd` and other language servers.
+
+For C/C++ header/source switching, handle both client names and send clangd's
+request to the attached client directly. Add this later in the same callback:
+
+```lua
+if client.name == "clangd" or client.name == "remote_clangd" then
+  vim.keymap.set("n", "<leader>ch", function()
+    client:request("textDocument/switchSourceHeader",
+      vim.lsp.util.make_text_document_params(), function(err, uri)
+        if err then
+          vim.notify(err.message, vim.log.levels.ERROR)
+        elseif uri and uri ~= "" then
+          vim.cmd.edit(vim.fn.fnameescape(vim.uri_to_fname(uri)))
+        end
+      end, bufnr)
+  end, { buffer = bufnr, desc = "Switch C/C++ header/source" })
+end
+```
+
+This avoids depending on `:LspClangdSwitchSourceHeader` being available or
+selecting the renamed remote client. Farwork configures clangd's path mappings
+and loads remote-only headers through its cache.
 
 </details>
 

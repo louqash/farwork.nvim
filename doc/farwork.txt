@@ -65,6 +65,9 @@ require('farwork').status()
 require('farwork').project_root(path)
     Deepest matching saved/configured/file root, then Git root, then directory.
 
+require('farwork').owns_buffer(bufnr)
+    True for local files and cached headers owned by the active remote project.
+
 Profile example: >
     require('farwork').setup({
       projects = {
@@ -79,6 +82,27 @@ Profile example: >
 Profiles override saved values; no repository-local Lua is executed.
 
 See README.md for installation, local clangd integration and detailed limits.
+
+
+
+LSP INTEGRATION                                    *farwork-lsp*
+Use require('farwork').local_clangd_root as vim.lsp.config.clangd.root_dir
+so local clangd does not start in known remote projects.
+
+In your LspAttach callback, after resolving client and bufnr: >lua
+    if client.name == "clangd" and require("farwork").owns_buffer(bufnr) then
+      return
+    end
+<
+This skips your callback's keymaps/hooks for local clangd; it does not stop
+or detach a client. Farwork separately detaches local clangd from its buffers.
+The remote client is named "remote_clangd", so its normal attach setup runs.
+
+For clangd-specific keymaps, match both "clangd" and "remote_clangd".
+For header/source switching, send textDocument/switchSourceHeader through
+client:request() to the attached client. Do not rely on a command that assumes
+the client is named "clangd". See the README's local-clangd integration section
+for a complete buffer-local mapping.
 
 
 PROJECT FILES AND AUTO-CONNECT                     *farwork-project-file*
