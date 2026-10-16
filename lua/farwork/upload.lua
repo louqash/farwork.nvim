@@ -158,7 +158,7 @@ function M.start(opts)
     root = root, destination = dest:gsub("/*$", "/"), rsync = rsync,
     queue = {}, pending = {}, opts = opts,
   }
-  local group = vim.api.nvim_create_augroup("RemoteWorkspaceUpload", { clear = true })
+  local group = vim.api.nvim_create_augroup("FarworkUpload", { clear = true })
   vim.api.nvim_create_autocmd("BufWritePost", {
     group = group,
     callback = function(event)

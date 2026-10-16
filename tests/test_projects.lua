@@ -9,10 +9,10 @@ local root = tmp .. "/repo"
 vim.fn.mkdir(root .. "/.git", "p")
 local profile = { host = "build-host", remote = "/workspace", environment = "source /venv/bin/activate" }
 local function write(path, value) vim.fn.writefile({ vim.json.encode(value) }, path) end
-write(tmp .. "/.remote-workspace.json", profile)
+write(tmp .. "/.farwork.json", profile)
 plugin.setup({ state_dir = tmp .. "/state" })
 assert(not projects.file_root(root .. "/src/new.cpp"), "Discovery must stop at Git boundary")
-write(root .. "/.remote-workspace.json", profile)
+write(root .. "/.farwork.json", profile)
 assert(plugin.project_root(root .. "/src/new.cpp") == root)
 assert(remote.configured_root(root .. "/src") == root)
 local called = false
@@ -27,11 +27,11 @@ vim.secure.read = function(path)
   return table.concat(vim.fn.readfile(path), "\n")
 end
 assert(projects.read(root).environment == profile.environment)
-write(root .. "/.remote-workspace.json", { host = "other", remote = "/other" })
+write(root .. "/.farwork.json", { host = "other", remote = "/other" })
 assert(projects.read(root).host == "other" and reads == 2, "Recheck trust on every read")
-write(root .. "/.remote-workspace.json", { host = "other", remote = "relative" })
+write(root .. "/.farwork.json", { host = "other", remote = "relative" })
 assert(not pcall(projects.read, root), "Reject invalid schema")
-write(root .. "/.remote-workspace.json", profile)
+write(root .. "/.farwork.json", profile)
 vim.secure.read = function() return nil end
 assert(not pcall(projects.read, root), "Untrusted file must not silently fall back")
 vim.system = function() error("Denied config must never connect") end
@@ -53,7 +53,7 @@ plugin.setup({ state_dir = tmp .. "/state", auto_connect = true })
 plugin.setup({ state_dir = tmp .. "/state", auto_connect = false })
 vim.wait(30, function() return false end)
 assert(starts == 1, "Disabling autoconnect must cancel scheduled work")
-vim.fn.delete(root .. "/.remote-workspace.json")
+vim.fn.delete(root .. "/.farwork.json")
 plugin.setup({ state_dir = tmp .. "/state", auto_connect = true, projects = { [root] = profile } })
 assert(vim.wait(1000, function() return starts == 2 end), "Lua profiles must autoconnect too")
 remote.status = function() return { root = "/another", upload = {} } end

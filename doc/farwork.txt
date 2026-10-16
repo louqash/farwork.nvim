@@ -83,7 +83,7 @@ See README.md for installation, local clangd integration and detailed limits.
 
 PROJECT FILES AND AUTO-CONNECT                     *farwork-project-file*
 
-Place .remote-workspace.json at the local project root:
+Place .farwork.json at the local project root:
 >
   {
     "host": "build-host",

@@ -1,6 +1,6 @@
 local M = {}
 local generation = 0
-local marker = ".remote-workspace.json"
+local marker = ".farwork.json"
 
 -- Also handles newly named files which do not exist yet.
 function M.directory(path)
@@ -35,7 +35,7 @@ end
 function M.setup(opts)
   generation = generation + 1
   local current = generation
-  local group = vim.api.nvim_create_augroup("RemoteWorkspaceAutoConnect", { clear = true })
+  local group = vim.api.nvim_create_augroup("FarworkAutoConnect", { clear = true })
   if not opts.auto_connect then return end
   local attempted, scheduled = {}, false
   local function check()

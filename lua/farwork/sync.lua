@@ -23,7 +23,7 @@ function M.recover(buf)
 end
 
 function M.setup()
-  local group = vim.api.nvim_create_augroup("RemoteWorkspaceRemoteSync", { clear = true })
+  local group = vim.api.nvim_create_augroup("FarworkRemoteSync", { clear = true })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "BufWritePost", "BufEnter" }, {
     group = group,
     callback = function(event) M.recover(event.buf) end,

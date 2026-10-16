@@ -1,4 +1,7 @@
-# farwork.nvim
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+  <img src="assets/logo-light.svg" alt="farwork.nvim" width="300">
+</picture>
 
 Local Neovim editing. Remote tools, builds, and workspaces.
 
@@ -107,7 +110,7 @@ require("farwork").setup({
 ### 3. Describe your project
 
 Use the repository root on both machines. In the **local** project root, create
-`.remote-workspace.json`:
+`.farwork.json`:
 
 ```json
 {
@@ -128,7 +131,7 @@ Use the repository root on both machines. In the **local** project root, create
 All paths in this file refer to the **remote machine**. A remote venv stays
 remote; the plugin does not copy it to your computer.
 
-If these settings are personal, add `.remote-workspace.json` to
+If these settings are personal, add `.farwork.json` to
 `.git/info/exclude`. You can also share the file with your team and use the same
 SSH alias with different connection details on each computer.
 
@@ -465,7 +468,7 @@ or recreate the remote dependencies on your computer.
 
 ## Remove a project
 
-Finish uploads, then close the Neovim session. Remove `.remote-workspace.json`
+Finish uploads, then close the Neovim session. Remove `.farwork.json`
 and any matching Lua profile or saved entry in `remote-projects.json`. This
 removes the connection settings, not your local files or remote workspace.
 Removing the marker alone does not stop an active connection.
@@ -501,10 +504,3 @@ to your workspace.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the
 [Neovim help file](doc/farwork.txt). Licensed under [MIT](LICENSE).
-
-## Migration from remote-workspace.nvim
-
-Use `require("farwork")` and `:checkhealth farwork` for new configurations.
-The old `require("remote_workspace")` modules remain compatibility aliases.
-Existing `.remote-workspace.json` project files, saved destinations, caches,
-and `:Remote*` / `:Upload*` commands keep their names and behavior.

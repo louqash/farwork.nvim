@@ -201,10 +201,13 @@ local function activate(root, config)
   })
   if active and active.client then
     local previous = vim.lsp.get_client_by_id(active.client)
-    if previous then previous:stop() end
+    if previous then
+      retiring_clients[previous.id] = true
+      previous:stop()
+    end
   end
   active = s
-  local group = vim.api.nvim_create_augroup("RemoteWorkspaceRemoteProject", { clear = true })
+  local group = vim.api.nvim_create_augroup("FarworkRemoteProject", { clear = true })
   vim.api.nvim_create_autocmd({ "BufEnter", "FileType" }, {
     group = group, callback = function(event) attach(event.buf) end,
   })
@@ -318,7 +321,7 @@ end
 function M.configured_root(path)
   local root = M.project_root(path)
   if not root then return nil end
-  if vim.uv.fs_stat(root .. "/.remote-workspace.json") or plugin_config.options.projects[root] then return root end
+  if vim.uv.fs_stat(root .. "/.farwork.json") or plugin_config.options.projects[root] then return root end
   local ok, saved = pcall(read_settings)
   if ok and saved[root] then return root end
 end

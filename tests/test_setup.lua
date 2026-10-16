@@ -1,7 +1,5 @@
 vim.opt.rtp:prepend(vim.fn.getcwd())
 local plugin = require("farwork")
-assert(require("remote_workspace") == plugin, "Legacy API must share the same module")
-assert(require("remote_workspace.config") == require("farwork.config"))
 plugin.setup()
 plugin.setup()
 for _, name in ipairs({ "RemoteCheck", "RemoteStart", "RemoteStatus", "RemoteRefresh", "RemoteBuild", "RemoteDiff", "RemoteSync", "RemoteProjects", "UploadStart" }) do

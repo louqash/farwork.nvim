@@ -243,6 +243,7 @@ require("farwork.config").options.projects[root] = {
   host = "coder.test", remote = remote, build = remote .. "/build", environment = "",
 }
 vim.ui.input = function() error("Configured profiles must not prompt") end
+local previous_client = client
 mod.start({ root = root })
 assert(vim.wait(10000, function()
   local count = 0
@@ -250,13 +251,18 @@ assert(vim.wait(10000, function()
   return count == 3 and require("farwork.upload").idle(root)
 end, 20), table.concat(notices, "\n"))
 assert(vim.wait(5000, function() return mod.status().lsp_connected end, 20))
-local sync_client = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
+local sync_client
+-- Only the new client may survive the explicit reconnect.
+for _, candidate in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })) do
+  if candidate.id ~= previous_client.id and not candidate:is_stopped() then sync_client = candidate end
+end
+assert(sync_client and sync_client.id ~= previous_client.id, "Reconnect must not reuse a retiring client")
 vim.cmd.RemoteSync()
 assert(vim.wait(10000, function() return require("farwork.upload").idle(root) end, 20))
 assert(not sync_client:is_stopped(), "Manual file sync must not restart the LSP")
 -- A trusted project file connects with no saved or Lua profile and no prompts.
 vim.fn.delete(temp .. "/state/remote-projects.json")
-local project_file = root .. "/.remote-workspace.json"
+local project_file = root .. "/.farwork.json"
 vim.fn.writefile({ vim.json.encode(require("farwork.config").options.projects[root]) }, project_file)
 require("farwork.config").options.projects = {}
 local secure_read = vim.secure.read
