@@ -180,7 +180,8 @@ To connect manually, run:
 :FarworkStart
 ```
 
-Wait for the initial upload to finish. Check the connection with:
+Clangd connects independently of the initial upload. Check both connection and
+upload status with:
 
 ```vim
 :FarworkStatus
@@ -324,9 +325,16 @@ review. Closing Neovim during a check does not guarantee that it finishes.
 
 ### A merge or rebase
 
+Remote clangd remains available while Git conflicts or history mismatches block
+uploads, including when you connect during a merge or rebase. Open-buffer edits
+reach clangd over LSP; guarded uploads remain paused. Headers and other files on
+the remote may be stale until syncing resumes. `:FarworkRefresh` also works while
+uploads are blocked. Builds and checks still require a completed initial sync.
+
 Finish uploads, then run `:FarworkUploadStop`. Resolve conflicts locally and finish the
 merge or rebase. Run `:FarworkDoctor` to review how the remote checkout should
-catch up. If uploads were stopped, run `:FarworkStart` after recovery.
+catch up. If uploads were stopped, run `:FarworkStart` after recovery. Otherwise,
+use `:FarworkUploadRetry` once the Git operation is complete and histories match.
 
 ## Fix a problem
 

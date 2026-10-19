@@ -107,7 +107,7 @@ function M.local_clangd_root(buf, on_dir)
 end
 
 local function attach(buf)
-  if not active or not active.lsp or not active.ready or not vim.api.nvim_buf_is_loaded(buf)
+  if not active or not active.lsp or not vim.api.nvim_buf_is_loaded(buf)
     or not types[vim.bo[buf].filetype] or not M.owns_buffer(buf) then return end
   for _, client in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "clangd" })) do
     vim.lsp.buf_detach_client(buf, client.id)
@@ -235,6 +235,9 @@ local function activate(root, config, change_directory)
     end,
   })
   remember(root, config)
+  -- LSP uses buffer contents over SSH independently of guarded disk uploads.
+  -- Keep it available while a merge/rebase or history mismatch pauses sync.
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do attach(buf) end
 end
 
 local function ensure_local_git(root, config, callback)
@@ -464,9 +467,8 @@ function M.setup(opts)
   opts = opts or {}
   require("farwork.sync").setup()
   vim.api.nvim_create_user_command("FarworkRefresh", function()
-    if not active or not active.ready then tell("Run :FarworkStart first"); return end
+    if not active then tell("Run :FarworkStart first"); return end
     if not active.lsp then tell("No remote language server configured"); return end
-    if not require("farwork.upload").idle(active.root) then tell("Wait for uploads; use :FarworkUploadStatus"); return end
     local client = active.client and vim.lsp.get_client_by_id(active.client)
     if client then
       retiring_clients[client.id] = true

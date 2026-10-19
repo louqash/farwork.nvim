@@ -69,6 +69,14 @@ Commands use Farwork prefixes; former Remote/Upload names have no aliases.
 Update custom mappings to the commands above.
 
 BEHAVIOR                                          *farwork-behavior*
+Clangd connects independently of the initial upload and stays available during
+Git conflicts/history mismatches. Open-buffer changes reach clangd over LSP;
+uploads remain guarded. Remote headers/other files may be stale until sync
+resumes. :FarworkRefresh works while uploads are blocked. Finish the Git
+operation, reconcile histories with :FarworkDoctor if needed, then use
+:FarworkUploadRetry (or :FarworkStart if uploads were stopped). Builds/checks
+still require completed initial sync.
+
 Local files overwrite corresponding remote files. Git metadata, virtual
 environments and build outputs are excluded. Deletions are not propagated.
 FarworkStart checks that Git HEAD and branch match; it does not reconcile

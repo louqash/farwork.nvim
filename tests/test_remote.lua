@@ -113,6 +113,7 @@ assert(vim.wait(20000, function()
   client = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
   return client and client.initialized
 end, 30), table.concat(notices, "\n"))
+assert(vim.wait(20000, function() return mod.status().ready end, 30), table.concat(notices, "\n"))
 assert(prompts == 2)
 assert(vim.fn.filereadable(root .. "/.git/farwork-bootstrap.json") == 0)
 assert(vim.fn.filereadable(remote .. "/main.cpp") == 1)
@@ -292,6 +293,37 @@ assert(vim.wait(10000, function()
   for _, notice in ipairs(notices) do if notice:find("Remote: Ready:", 1, true) then count = count + 1 end end
   return count == 4 and require("farwork.upload").idle(root)
 end, 20), table.concat(notices, "\n"))
+-- An in-progress merge must block uploads, not the language server.
+local head = real_system({ "git", "-C", root, "rev-parse", "HEAD" }, { text = true }):wait().stdout:gsub("%s+$", "")
+vim.fn.writefile({ head }, root .. "/.git/MERGE_HEAD")
+local remote_before = vim.fn.readfile(remote .. "/main.cpp")
+local conflict_previous = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1]
+mod.start({ root = root })
+assert(vim.wait(10000, function()
+  return mod.status().upload.error ~= nil and mod.status().lsp_connected
+    and (not conflict_previous or conflict_previous:is_stopped())
+end, 20), table.concat(notices, "\n"))
+assert(not mod.status().ready, "Git guard must still block initial sync")
+assert(mod.status().upload.error:find("MERGE_HEAD", 1, true))
+vim.api.nvim_buf_set_lines(buf, 1, 2, false, { "int main() { return missing_after_reconnect; }" })
+vim.api.nvim_exec_autocmds("TextChanged", { buffer = buf })
+assert(vim.wait(10000, has_missing_name, 20), "Clangd must analyze edits while merge blocks uploads")
+vim.api.nvim_buf_call(buf, function() vim.cmd.write() end)
+assert(vim.deep_equal(vim.fn.readfile(remote .. "/main.cpp"), remote_before), "Blocked saves must not overwrite remote files")
+local blocked_id = vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })[1].id
+vim.cmd.FarworkRefresh()
+assert(vim.wait(10000, function()
+  for _, c in ipairs(vim.lsp.get_clients({ bufnr = buf, name = "remote_clangd" })) do
+    if c.id ~= blocked_id and c.initialized then return true end
+  end
+  return false
+end, 20), "Refresh must work before initial sync")
+vim.api.nvim_buf_set_lines(buf, 1, 2, false, { "int main() { return answer(); }" })
+vim.api.nvim_buf_call(buf, function() vim.cmd.write() end)
+vim.fn.delete(root .. "/.git/MERGE_HEAD")
+vim.cmd.FarworkUploadRetry()
+assert(vim.wait(10000, function() return mod.status().ready and require("farwork.upload").idle(root) end, 20))
+assert(vim.deep_equal(vim.fn.readfile(remote .. "/main.cpp"), vim.fn.readfile(root .. "/main.cpp")))
 -- Sync/build mode does not require a compilation database or start clangd.
 local start_count = #starts
 vim.fn.delete(remote .. "/build/compile_commands.json")
